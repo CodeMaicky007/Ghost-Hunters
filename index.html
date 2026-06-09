@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ghost Hunters: Reversed — Prototipo</title>
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Three.js por importmap + CDN (sin build, sin node_modules).
+       Se sirve por http (servidor local o itch.io). -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Pantalla de inicio / captura de puntero -->
+  <div id="overlay">
+    <div class="overlay-card">
+      <h1>👻 GHOST HUNTERS: <span class="rev">REVERSED</span></h1>
+      <p class="sub">Eres <strong>LA ENTIDAD</strong> de los Backrooms. Phasmophobia… al revés.</p>
+      <p class="warn">Los investigadores completan <strong>misiones</strong>. <strong>Estórbalos</strong>
+         con sustos <em>(clic)</em> para que no terminen.<br>
+         Cada cierto tiempo <strong>RUGES</strong> → empieza la <strong>CACERÍA</strong>: las luces mueren,
+         ellos quedan ciegos y <strong>tú ves en la oscuridad</strong>. Ahí <strong>puedes matarlos</strong>.</p>
+      <button id="startBtn" disabled>CARGANDO…</button>
+      <p class="hint">Mover: WASD · Mirar: ratón · Rugido [1]/clic (revela al más lejano) · [G] forzar cacería · [Esc] salir</p>
+    </div>
+  </div>
+
+  <!-- HUD (overlay HTML, NO va dentro del canvas: así el filtro no lo afecta) -->
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="glitchBanner" class="hidden"></div>
+    <div id="topbar">
+      <div class="stat">⏱ <b id="matchTime">3:00</b></div>
+      <div class="stat">🛠 Misiones <b id="missions">0/4</b></div>
+      <div class="stat">🕵 Investigadores <b id="hunters">3</b></div>
+      <div class="stat">🏢 Piso <b id="floor">🟡 0</b></div>
+    </div>
+    <div id="bottombar">
+      <div class="hintline">Cacería en <b id="nextHunt">--</b></div>
+    </div>
+
+    <!-- Barra de habilidades -->
+    <div id="abilities">
+      <div class="abil ready" id="ab1"><span class="k">1</span><span class="n">Rugido</span><span class="cd" id="cd1">LISTO</span></div>
+      <div class="abil locked" id="ab2"><span class="k">2</span><span class="n">Frío</span><span class="cd">próx.</span></div>
+      <div class="abil locked" id="ab3"><span class="k">3</span><span class="n">Temblor</span><span class="cd">próx.</span></div>
+    </div>
+
+    <!-- Minimapa -->
+    <canvas id="minimap" width="150" height="150"></canvas>
+  </div>
+
+  <!-- Pantalla de fin -->
+  <div id="endscreen" class="hidden">
+    <div class="overlay-card">
+      <h1 id="endTitle"></h1>
+      <p id="endMsg" class="sub"></p>
+      <button id="againBtn">REVANCHA</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

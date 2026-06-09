@@ -1,0 +1,6 @@
+Suelta aquí tu pista de música y renómbrala a:  track.mp3
+
+- Se reproduce en BUCLE CONTINUO automáticamente al pulsar JUGAR.
+- Formatos válidos: .mp3 (recomendado), .ogg, .wav. Si usas otro formato, dímelo y cambio la ruta.
+- Si quieres bucle perfectamente sin cortes (gapless), avísame y lo cargo por Web Audio.
+- Licencia: usa solo música CC0/CC-BY (o tuya) y la acreditamos en el README.

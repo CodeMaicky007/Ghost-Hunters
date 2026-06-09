@@ -1,0 +1,6 @@
+Suelta aquí los modelos 3D de los personajes (formato .glb o .gltf).
+
+- Ideal: un personaje rigged con animaciones (idle / walk). Lo clono para cada investigador.
+- Mejor fuente CC0: Quaternius (quaternius.com) — personajes low-poly animados, CC0.
+- Cuando lo dejes aquí, dime el nombre del archivo y lo enchufo con GLTFLoader (+ su animación).
+- Licencia: solo CC0/CC-BY, y lo acreditamos en el README.
