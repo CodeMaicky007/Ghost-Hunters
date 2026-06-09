@@ -30,10 +30,10 @@ const CELL = 1.5;
     scene.add(im);
 
     // Cámara ortográfica cenital, framing exacto [0,W]x[0,D].
-    const W = info.width, D = info.depth, S = Math.max(W, D) + 4;
+    const W = info.width, D = info.depth, S = 30, CX = 22, CZ = 22; // zoom esquina
     const cam = new THREE.OrthographicCamera(-S / 2, S / 2, S / 2, -S / 2, 0.1, 100);
     cam.up.set(0, 0, 1);
-    cam.position.set(W / 2, 50, D / 2); cam.lookAt(W / 2, 0, D / 2);
+    cam.position.set(CX, 50, CZ); cam.lookAt(CX, 0, CZ);
     const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setSize(900, 900); document.body.appendChild(renderer.domElement);
     function loop(){ renderer.render(scene, cam); requestAnimationFrame(loop);} loop();
     document.getElementById('tag').textContent = `BLANCO=muros reales, ROJO=MAP horneado. W=${W.toFixed(1)} cols=${baked.cols} walls=${baked.walls}`;
