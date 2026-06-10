@@ -50,3 +50,24 @@ test('dropCarried suelta el objeto en la celda dada', () => {
   assert.deepEqual([r.objects[0].gx, r.objects[0].gz], [8, 9]);
   assert.equal(dropCarried(r, 7, 1, 1), false); // ya no carga nada
 });
+
+import { depositCarried, depositedCount, allDeposited } from '../js/ritual.js';
+
+test('depositCarried marca DEPOSITED y lo fija al altar', () => {
+  const r = createRitual([[2, 3], [5, 6]], [4, 4]);
+  pickup(r, 0, 7);
+  assert.equal(depositCarried(r, 7), true);
+  assert.equal(r.objects[0].status, OBJ.DEPOSITED);
+  assert.deepEqual([r.objects[0].gx, r.objects[0].gz], [4, 4]);
+  assert.equal(depositedCount(r), 1);
+  assert.equal(allDeposited(r), false);
+  assert.equal(r.phase, PHASE.GATHER);
+});
+
+test('depositar el último objeto pasa a fase CHANNEL', () => {
+  const r = createRitual([[2, 3], [5, 6]], [4, 4]);
+  pickup(r, 0, 1); depositCarried(r, 1);
+  pickup(r, 1, 2); depositCarried(r, 2);
+  assert.equal(allDeposited(r), true);
+  assert.equal(r.phase, PHASE.CHANNEL);
+});

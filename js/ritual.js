@@ -48,3 +48,19 @@ export function dropCarried(ritual, agentId, gx, gz) {
   o.status = OBJ.ON_MAP; o.carrier = null; o.gx = gx; o.gz = gz;
   return true;
 }
+
+export function depositedCount(ritual) {
+  return ritual.objects.filter((o) => o.status === OBJ.DEPOSITED).length;
+}
+export function allDeposited(ritual) {
+  return depositedCount(ritual) === ritual.objects.length;
+}
+
+export function depositCarried(ritual, agentId) {
+  const o = objectCarriedBy(ritual, agentId);
+  if (!o) return false;
+  o.status = OBJ.DEPOSITED; o.carrier = null;
+  o.gx = ritual.altar.gx; o.gz = ritual.altar.gz;
+  if (allDeposited(ritual) && ritual.phase === PHASE.GATHER) ritual.phase = PHASE.CHANNEL;
+  return true;
+}
