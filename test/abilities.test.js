@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAbilities, AB, KEY, tickEnergy } from '../js/abilities.js';
+import { createAbilities, AB, KEY, tickEnergy, canActivate } from '../js/abilities.js';
 
 test('createAbilities inicializa energía 0 y activos vacíos', () => {
   const ab = createAbilities();
@@ -40,4 +40,21 @@ test('tickEnergy baja cooldowns y spectral, y caduca trampas/decoy', () => {
   assert.equal(ab.traps.length, 1);        // la de 0.5 caducó
   assert.equal(ab.traps[0].gx, 2);
   assert.equal(ab.decoy, null);            // caducó
+});
+
+test('canActivate respeta energía y cooldown', () => {
+  const ab = createAbilities();
+  assert.equal(canActivate(ab, KEY.TELEPORT), false); // energía 0
+  ab.energy = 1;
+  assert.equal(canActivate(ab, KEY.TELEPORT), true);
+  ab.cooldowns.teleport = 1;
+  assert.equal(canActivate(ab, KEY.TELEPORT), false); // en cooldown
+});
+
+test('canActivate de visión espectral solo en cacería, sin coste de energía', () => {
+  const ab = createAbilities(); // energía 0
+  assert.equal(canActivate(ab, KEY.SPECTRAL, { hunting: false }), false);
+  assert.equal(canActivate(ab, KEY.SPECTRAL, { hunting: true }), true);
+  ab.cooldowns.spectral = 1;
+  assert.equal(canActivate(ab, KEY.SPECTRAL, { hunting: true }), false);
 });
