@@ -47,8 +47,8 @@ export class HunterModel {
   // orientar hacia (dx,dz) suavizado
   faceDir(dx, dz) {
     if (dx === 0 && dz === 0) return;
-    // El modelo Quaternius mira a -Z por defecto; +PI para que mire su avance.
-    const target = Math.atan2(dx, dz) + Math.PI;
+    // El modelo Quaternius mira a +Z por defecto: atan2(dx,dz) sin offset.
+    const target = Math.atan2(dx, dz);
     let d = target - this._yaw;
     while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
     this._yaw += d * 0.25;

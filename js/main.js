@@ -9,16 +9,21 @@ import * as THREE from 'three';
 import { loadAllAssets } from './assets.js';
 import { placeEnv } from './env.js';
 import { bakeGrid } from './grid.js';
+import { collidesBoxGrid } from './logic.js';
 import { HunterModel } from './hunters.js';
 
 // ---------- Config / balance ----------
-// CELL=1.5: los tabiques del modelo Backrooms miden ~1.5u; con celdas de 3 el
-// raycast los saltaba y el nivel salía como una sala vacía. A 1.5 el horneado
-// reproduce el laberinto real (muros de altura completa, totalmente conexo).
-const CELL = 1.5;
+// CELL=0.75: el horneado rasteriza la huella de los tabiques (finos, ~1u) al
+// grid; con celdas pequeñas los muros quedan finos y alineados con lo que se ve,
+// y la colisión coincide con los muros visibles.
+const CELL = 0.75;
+// Grid de COLISIÓN del jugador, mucho más fino que el de IA: a 0.25 los muros y
+// pasillos del laberinto se representan ~3× más exactos, así el jugador choca
+// contra la pared visible y no contra el "colchón" de medio-celda del grid grueso.
+const CELL_COL = 0.25;
 const EYE = 1.6;
-const PLAYER_R = 0.4;
-const HUNTER_R = 0.3;
+const PLAYER_R = 0.3;   // ~media celda a CELL=0.75; mayor atascaría al jugador
+const HUNTER_R = 0.25;
 const SPEED = 4.2;
 const SENS = 0.0022;
 const MAX_PITCH = Math.PI / 2 - 0.05;
@@ -66,6 +71,9 @@ function genBackrooms(n) {
 }
 let MAP = genBackrooms(GRID);
 let ROWS = MAP.length, COLS = MAP[0].length;
+// Grid de colisión del jugador (fino). Por defecto = grid de IA; boot() lo
+// sustituye por el horneado fino cuando el GLB carga.
+let COL_MAP = MAP, COL_COLS = COLS, COL_ROWS = ROWS, COL_CELL = CELL;
 
 // ============================================================
 //  Helpers de grid (leen MAP/ROWS/COLS en tiempo de llamada)
@@ -105,6 +113,18 @@ let REACH;                          // se asigna en boot() tras hornear
 function firstOpenCell() {
   for (let j = 1; j < ROWS - 1; j++) for (let i = 1; i < COLS - 1; i++) if (MAP[j][i] === 0) return [i, j];
   return [1, 1];
+}
+// Celda transitable con holgura (sus 8 vecinas libres) para no nacer pegado a un muro.
+function clearSpawnCell() {
+  const open8 = (i, j) => {
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const x = i + dx, z = j + dz;
+      if (x < 0 || z < 0 || x >= COLS || z >= ROWS || MAP[z][x] === 1) return false;
+    }
+    return true;
+  };
+  for (const [i, j] of REACH.list) if (open8(i, j)) return [i, j];
+  return REACH.list[0];
 }
 function spreadCells(count, avoid = () => false) {
   const pool = REACH.list.filter(([x, z]) => !avoid(x, z));
@@ -166,16 +186,52 @@ const sfx = {
 //  Estaciones de misión
 // ============================================================
 const stations = [];
-function makeStations() {
+const TV_HEIGHT = 0.95;   // alto objetivo del monitor en el suelo (unidades de mundo)
+// Cada estación es un MONITOR: arranca ENCENDIDO (pantalla con brillo emissive) y
+// los investigadores lo van APAGANDO (progress 0->1). Apagado = pantalla sin brillo.
+function makeStations(tvGltf) {
   const cells = spreadCells(NUM_STATIONS + 1, (x, z) => (x <= 5 && z <= 7)).slice(1, NUM_STATIONS + 1);
-  const geo = new THREE.CylinderGeometry(0.4, 0.55, 1.3, 10);
+  const fallbackGeo = new THREE.CylinderGeometry(0.4, 0.55, 1.3, 10);
   for (const [gx, gz] of cells) {
-    const mat = new THREE.MeshStandardMaterial({ color: 0x222244, emissive: 0xff3030, emissiveIntensity: 1.0, roughness: 0.5 });
-    const mesh = new THREE.Mesh(geo, mat); const [wx, wz] = worldOf(gx, gz); mesh.position.set(wx, 0.65, wz); scene.add(mesh);
+    const [wx, wz] = worldOf(gx, gz);
+    let mesh, mat;
+    if (tvGltf) {
+      mesh = tvGltf.scene.clone(true);
+      // La pantalla mira a +Z local: orientarla hacia el centro de la sala para
+      // que el brillo se vea desde el área jugable.
+      const cxw = ((COLS - 1) * CELL) / 2, czw = ((ROWS - 1) * CELL) / 2;
+      mesh.rotation.y = Math.atan2(cxw - wx, czw - wz);
+      // Escalar a TV_HEIGHT midiendo la caja real (los nodos del GLB ya escalan).
+      mesh.updateMatrixWorld(true);
+      let box = new THREE.Box3().setFromObject(mesh);
+      mesh.scale.setScalar(TV_HEIGHT / Math.max(1e-3, box.max.y - box.min.y));
+      mesh.updateMatrixWorld(true);
+      box = new THREE.Box3().setFromObject(mesh);
+      // Centrar en XZ sobre la celda y apoyar la base en el suelo (y=0).
+      mesh.position.set(wx - (box.min.x + box.max.x) / 2, -box.min.y, wz - (box.min.z + box.max.z) / 2);
+      // Material propio por TV (clon) para apagarla sin afectar a las demás.
+      let base = null;
+      mesh.traverse((o) => { if (o.isMesh && o.material && !base) base = Array.isArray(o.material) ? o.material[0] : o.material; });
+      mat = base ? base.clone() : new THREE.MeshStandardMaterial({ emissive: 0x9fe8ff, emissiveIntensity: 1 });
+      mat.emissiveIntensity = 1;
+      mesh.traverse((o) => { if (o.isMesh) o.material = mat; });
+    } else {
+      mat = new THREE.MeshStandardMaterial({ color: 0x222244, emissive: 0x9fe8ff, emissiveIntensity: 1, roughness: 0.5 });
+      mesh = new THREE.Mesh(fallbackGeo, mat); mesh.position.set(wx, 0.65, wz);
+    }
+    scene.add(mesh);
     stations.push({ gx, gz, wx, wz, progress: 0, done: false, mesh, mat });
   }
 }
-function refreshStation(s) { if (s.done) { s.mat.emissive.setRGB(0.1, 1, 0.2); s.mat.emissiveIntensity = 1.4; return; } s.mat.emissive.setRGB(1 - s.progress, s.progress, 0.12); }
+// Apagado (done) = sin brillo. El parpadeo de "encendido" lo aplica updateStations().
+function refreshStation(s) { if (s.mat && s.done) s.mat.emissiveIntensity = 0; }
+// Parpadeo de monitor encendido; el brillo baja conforme se va apagando (progress).
+function updateStations() {
+  for (const s of stations) {
+    if (s.done || !s.mat) continue;
+    s.mat.emissiveIntensity = (1 - 0.8 * s.progress) * (0.8 + 0.2 * Math.random());
+  }
+}
 const nearestIncompleteStation = (x, z) => { let best = -1, bd = Infinity; stations.forEach((s, i) => { if (s.done) return; const d = (s.wx - x) ** 2 + (s.wz - z) ** 2; if (d < bd) { bd = d; best = i; } }); return best; };
 
 // ============================================================
@@ -256,15 +312,10 @@ let yaw = 0, pitch = 0, currentFloor = 0;
 let roarCd = 0, revealTimer = 0, revealedBot = null;
 
 function groundHeight() { return 0; }
+// Colisión del jugador contra el grid FINO: recorre toda la huella del jugador
+// (no 4 esquinas) y para exacto en la pared visible.
 function collidesPlayer(x, z) {
-  const r = PLAYER_R;
-  const c = [[x - r, z - r], [x + r, z - r], [x - r, z + r], [x + r, z + r]];
-  for (const [px, pz] of c) {
-    const gx = Math.round(px / CELL), gz = Math.round(pz / CELL);
-    if (gx < 0 || gz < 0 || gx >= COLS || gz >= ROWS) return true;
-    if (MAP[gz][gx] === 1) return true;
-  }
-  return false;
+  return collidesBoxGrid(COL_MAP, COL_COLS, COL_ROWS, COL_CELL, x, z, PLAYER_R);
 }
 
 const keys = Object.create(null);
@@ -298,7 +349,7 @@ const GAME = { state: 'playing', timeLeft: MATCH_TIME };
 function checkEnd() {
   if (GAME.state !== 'playing') return;
   if (hunters.every((h) => !h.alive)) return endGame(true, 'Eliminaste a todos los investigadores.');
-  if (stations.every((s) => s.done)) return endGame(false, 'Completaron todas sus misiones y escaparon.');
+  if (stations.every((s) => s.done)) return endGame(false, 'Apagaron todos los monitores y escaparon.');
   if (GAME.timeLeft <= 0) return endGame(true, 'Aguantaste: no terminaron a tiempo.');
 }
 function endGame(win, msg) {
@@ -387,6 +438,7 @@ function update(dt) {
   moveGhost(dt);
   applyAtmosphere();
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
+  updateStations();
   updateHUD(hunting); drawMinimap(); checkEnd();
 }
 let last = performance.now();
@@ -410,14 +462,19 @@ async function boot() {
     const baked = bakeGrid(info.wallMeshes, info.width, info.depth, CELL, info.ceilY);
     MAP = baked.map; ROWS = baked.rows; COLS = baked.cols;
     console.log('BAKE cols', baked.cols, 'rows', baked.rows, 'walls', baked.walls, 'open', baked.open);
+    // Grid fino de colisión del jugador (mismas mallas de muro, celda menor).
+    const col = bakeGrid(info.wallMeshes, info.width, info.depth, CELL_COL, info.ceilY);
+    COL_MAP = col.map; COL_COLS = col.cols; COL_ROWS = col.rows; COL_CELL = CELL_COL;
+    console.log('BAKE col cols', col.cols, 'rows', col.rows, 'walls', col.walls, 'open', col.open);
   }
   const [ox, oz] = firstOpenCell();
   REACH = floodReachable(ox, oz);
   console.log('REACH celdas transitables:', REACH.list.length);
-  pos.set(ox * CELL, EYE, oz * CELL);
+  const [sx, sz] = clearSpawnCell();
+  pos.set(sx * CELL, EYE, sz * CELL);
 
   rebuildMinimap();
-  makeStations();
+  makeStations(assets && assets.tv);
   makeHunters(assets && assets.chars);
   startBtn.textContent = 'CLICK PARA JUGAR';
   startBtn.disabled = false;

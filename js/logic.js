@@ -38,6 +38,26 @@ export function pickDistinct(pool, n, rng = Math.random) {
   return out;
 }
 
+// ¿La celda (gx,gz) es muro? Fuera del grid cuenta como muro (cierra el borde).
+export function isSolidCell(map, cols, rows, gx, gz) {
+  if (gx < 0 || gz < 0 || gx >= cols || gz >= rows) return true;
+  return map[gz][gx] === 1;
+}
+
+// Colisión continua de una caja (jugador, semilado r) contra el grid: marca
+// choque si CUALQUIER celda que solape la huella [x±r, z±r] es muro. Recorre toda
+// la huella (no solo 4 esquinas) → no se cuela por muros más finos que el jugador,
+// y para EXACTO en la celda-muro, sin el "colchón" de medio-celda del grid grueso.
+// El grid es centrado: la celda i cubre [(i-0.5)·cell, (i+0.5)·cell] (índice = round).
+export function collidesBoxGrid(map, cols, rows, cell, x, z, r) {
+  const i0 = Math.round((x - r) / cell), i1 = Math.round((x + r) / cell);
+  const j0 = Math.round((z - r) / cell), j1 = Math.round((z + r) / cell);
+  for (let j = j0; j <= j1; j++)
+    for (let i = i0; i <= i1; i++)
+      if (isSolidCell(map, cols, rows, i, j)) return true;
+  return false;
+}
+
 // Analiza los AABB de las mallas del entorno (en cualquier escala uniforme) y
 // distingue cáscara exterior / suelo / techo / muros, sin depender de three.
 // boxes: [{minX,maxX,minY,maxY,minZ,maxZ}] (en el MISMO espacio/escala).
