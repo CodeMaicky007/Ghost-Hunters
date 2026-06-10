@@ -386,7 +386,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     // a un objeto suelto descubierto -> lo coge.
     const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
     const carried = RIT.objectCarriedBy(ritual, h.id);
-    if (carried) {
+    if (carried && !hunting) {
       if (Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE) RIT.depositCarried(ritual, h.id);
     } else if (h.role === RIT.RROLE.FETCH) {
       for (const o of ritual.objects) {
@@ -477,20 +477,19 @@ function roar() {
 // ============================================================
 //  Cacería + partida
 // ============================================================
-const hunt = { active: 0 }; let huntTimer = HUNT_EVERY;
+const hunt = { active: 0 };
 // Pizarra compartida del escuadrón (niebla, objetivos, peligro, eventos, roster).
 let BB = AIB.createBlackboard();
 const VISION_R = AIB.AI.VISION_RADIUS;
 let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
-function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
+function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
-  if (escalated) { hunt.active = HUNT_DUR; return true; }
+  if (escalated) { hunt.active = ABL.AB.HUNT_DUR; return true; }
   if (hunt.active > 0) { hunt.active -= dt; if (hunt.active <= 0) endHunt(); }
-  else { huntTimer -= dt; if (huntTimer <= 0) { startHunt(); huntTimer = HUNT_EVERY; } }
-  return hunt.active > 0;
+  return hunt.active > 0;   // ya NO hay auto-temporizador: la cacería la activa el jugador (Espacio)
 }
 const GAME = { state: 'playing', timeLeft: MATCH_TIME };
 function checkEnd() {
@@ -530,7 +529,7 @@ function updateHUD(hunting) {
   el('floor').textContent = '🟡 0';
   el('cd1').textContent = roarCd > 0 ? `${roarCd.toFixed(1)}s` : 'LISTO';
   el('ab1').classList.toggle('ready', roarCd <= 0);
-  el('nextHunt').textContent = hunting ? 'AHORA' : `${Math.max(0, huntTimer).toFixed(0)}s`;
+  el('nextHunt').textContent = hunting ? Math.ceil(hunt.active) + 's' : '—';
   banner.className = hunting ? 'active' : 'hidden';
   if (hunting) banner.textContent = '⟲ CACERÍA — LUCES FUERA ⟲';
   if (escalated) { banner.className = 'active'; banner.textContent = '☠ EL VELO SE ROMPIÓ — CACERÍA PERMANENTE ☠'; }
@@ -579,7 +578,8 @@ function drawMinimap() {
 function applyAtmosphere() {
   const lit = hunt.active <= 0;
   ambient.color.setHex(0xbda86a);
-  ambient.intensity = lit ? 0.85 : 0.04;
+  const flicker = lit ? 1 : (Math.random() < 0.2 ? 0.0 : 0.06); // parpadeo en cacería
+  ambient.intensity = lit ? 0.85 : flicker;
   hemi.intensity = lit ? 0.5 : 0.02;
   const fogc = 0x1c1808; scene.fog.color.setHex(fogc); scene.background.setHex(fogc);
 }
@@ -589,7 +589,7 @@ function moveGhost(dt) {
   const move = new THREE.Vector3();
   if (keys['KeyW']) move.add(fwd); if (keys['KeyS']) move.sub(fwd); if (keys['KeyD']) move.add(right); if (keys['KeyA']) move.sub(right);
   if (move.lengthSq() > 0) {
-    move.normalize().multiplyScalar(SPEED * dt);
+    move.normalize().multiplyScalar(SPEED * (hunt.active > 0 ? ABL.AB.HUNT_SPEED_MULT : 1) * dt);
     if (!collidesPlayer(pos.x + move.x, pos.z)) pos.x += move.x;
     if (!collidesPlayer(pos.x, pos.z + move.z)) pos.z += move.z;
   }
@@ -787,8 +787,8 @@ function update(dt) {
   applyAtmosphere();
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
   // Canalización: cuenta canalizadores en rango del altar; interrumpe si el
-  // fantasma ruge cerca del altar durante la fase.
-  if (ritual.phase === RIT.PHASE.CHANNEL) {
+  // fantasma ruge cerca del altar durante la fase. En cacería el ritual se pausa.
+  if (ritual.phase === RIT.PHASE.CHANNEL && !hunting) {
     const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
     let nCh = 0;
     for (const h of hunters) if (h.alive && Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 0.6) nCh++;
