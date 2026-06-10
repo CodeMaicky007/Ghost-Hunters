@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { loadAllAssets } from './assets.js';
 import { placeEnv } from './env.js';
 import { bakeGrid } from './grid.js';
-import { collidesBoxGrid } from './logic.js';
+import { collidesBoxGrid, parryChance, rollParry } from './logic.js';
 import { HunterModel } from './hunters.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
@@ -46,6 +46,11 @@ const SCARE_FLEE = 4;
 const ROAR_CD = 8;
 const REVEAL_DUR = 5;
 const ROAR_INTERRUPT_WINDOW = 0.3;   // ventana (s) tras un rugido en la que interrumpe la canalización
+
+const PARRY = { base: 0.25, perBravery: 0.5, panicMul: 0.3 };
+const STUN_DUR = 3;      // s de aturdimiento del fantasma tras un parry
+const STUN_SLOW = 0.4;   // multiplicador de velocidad mientras estás aturdido
+const PARRY_FLEE = 3;    // s que huye el superviviente que paró
 
 // ============================================================
 //  Mapa de ocupación — fallback procedural; se sustituye por el
@@ -310,7 +315,7 @@ function makeHunters(chars) {
       flee: 0, repath: 0, next: null, working: -1,
       // --- estado IA ---
       bravery: 0.2 + Math.random() * 0.7,   // personalidad fija
-      stress: 0, sanity: 1, fear: 0, panic: false,
+      stress: 0, sanity: 1, fear: 0, panic: false, parryUsed: false,
       role: AIB.ROLES.EXPLORE_A, recentCells: [], lastBarkT: -999, goal: null,
     });
   }
@@ -443,6 +448,7 @@ let yaw = 0, pitch = 0, currentFloor = 0;
 let roarCd = 0, revealTimer = 0, revealedBot = null;
 let debugAI = false;   // overlay de depuración de la IA (tecla O)
 let escalated = false;   // al agotarse el tiempo: cacería permanente
+let stun = 0;   // s restantes de aturdimiento del fantasma (por parry)
 const ab = ABL.createAbilities();   // energía + habilidades del fantasma
 
 function groundHeight() { return 0; }
@@ -496,7 +502,9 @@ const VISION_R = AIB.AI.VISION_RADIUS;
 let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
-function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
+function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
+  for (const h of hunters) if (h.alive) h.parryUsed = false;
+}
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
   if (escalated) { hunt.active = ABL.AB.HUNT_DUR; return true; }
@@ -787,6 +795,7 @@ function update(dt) {
   if (GAME.timeLeft <= 0 && !escalated) { escalated = true; GAME.timeLeft = 0; if (hunt.active <= 0) startHunt(); }
   NOW_SEC = performance.now() / 1000;   // reloj monótono muestreado 1× por frame
   if (roarCd > 0) roarCd = Math.max(0, roarCd - dt);
+  if (stun > 0) stun = Math.max(0, stun - dt);
   if (revealTimer > 0) revealTimer = Math.max(0, revealTimer - dt);
   const hunting = updateHunt(dt);
   // Energía: gana con el tiempo + bonus si hay un superviviente cerca (acecho).
