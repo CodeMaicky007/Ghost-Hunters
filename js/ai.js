@@ -48,7 +48,7 @@ export const parseKey = (k) => k.split(',').map(Number);
 export function createBlackboard() {
   return {
     discovered: new Set(),  // claves "gx,gz" vistas por el escuadrón
-    objectives: new Map(),  // clave -> {gx, gz, idx} (idx en stations[])
+    objectives: new Map(),  // clave -> {gx, gz, ...} objetivos descubiertos (sin uso tras R2: ritual conocido)
     danger: new Map(),      // clave -> score
     events: [],             // {type, gx, gz, t}
     roster: [],             // estado público por agente. TODO R2: {id,alive,gx,gz,role,stress}/tick

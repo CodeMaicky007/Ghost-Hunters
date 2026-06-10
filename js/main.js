@@ -367,8 +367,9 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     stepToward(h, isOpenCell(jitter[0], jitter[1]) ? jitter : away, HUNTER_FLEE_SPEED, dt);
     pushRecent(h);
   } else {
-    // Objetivo decidido por la IA (coordinador + utilidad). Si la meta es una
-    // estación descubierta y estamos encima, trabajamos; si no, caminamos a la meta.
+    // Objetivo decidido por la IA (coordinador + utilidad). Si carga un objeto y
+    // llega al altar, lo deposita; si es FETCH y pisa un objeto suelto, lo coge;
+    // luego camina hacia la meta del rol.
     const cands = buildCandidates(h);
     const newGoal = AIB.chooseGoal(h, cands, BB, alliesOf(h), AIB.AI);
     // Si la meta cambia, invalida el waypoint BFS para no seguir 0.35s la ruta vieja.
@@ -722,7 +723,7 @@ function update(dt) {
     const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
     let nCh = 0;
     for (const h of hunters) if (h.alive && Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 0.6) nCh++;
-    const ghostNear = Math.hypot(pos.x - ax, pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 1.5 && (hunt.active > 0 || roarCd > ROAR_CD - 0.3);
+    const ghostNear = Math.hypot(pos.x - ax, pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 1.5 && (hunt.active > 0 || roarCd > ROAR_CD - ROAR_INTERRUPT_WINDOW);
     RIT.channelTick(ritual, nCh, dt, { interrupt: ghostNear });
   }
   syncRitualMeshes();
