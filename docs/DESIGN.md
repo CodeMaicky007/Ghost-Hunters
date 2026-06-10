@@ -16,8 +16,9 @@ base; algunos números (p. ej. **3 investigadores → 8 supervivientes**) y la c
 - **R2 — Progresión ritual + ritual final + nueva victoria** (objetos rituales → altar → canalización
   con defensa; el fantasma se destruye = ganan; el temporizador, al agotarse, escala a cacería
   permanente). Spec: [`superpowers/specs/2026-06-10-progresion-ritual-design.md`](superpowers/specs/2026-06-10-progresion-ritual-design.md).
-- **R3 — Kit de habilidades del fantasma + cacería de 30s** (Susurro, Distorsión, Aparición,
-  Teletransporte, Trampa Paranormal; cacería: salidas bloqueadas, parpadeo, kill instantáneo).
+- **R3 — Kit del fantasma + cacería de 45s + percepción invertida** (Energía Paranormal; habilidades:
+  Teletransporte, Trampa, Aparición, Visión espectral; normal = invisible y te sienten por sonido y te
+  evitan; cacería = visible, +rápido, parpadeo). Spec: [`superpowers/specs/2026-06-10-kit-fantasma-caceria-design.md`](superpowers/specs/2026-06-10-kit-fantasma-caceria-design.md).
 - **R4 — Sistema de Parry** (uno por cacería, ventana mínima, éxito = aturde 3s, fallo = muerte).
 
 ## Pitch
