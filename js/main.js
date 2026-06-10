@@ -13,6 +13,7 @@ import { collidesBoxGrid } from './logic.js';
 import { HunterModel } from './hunters.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
+import * as ABL from './abilities.js';
 
 // ---------- Config / balance ----------
 // CELL=0.75: el horneado rasteriza la huella de los tabiques (finos, ~1u) al
@@ -425,6 +426,7 @@ let yaw = 0, pitch = 0, currentFloor = 0;
 let roarCd = 0, revealTimer = 0, revealedBot = null;
 let debugAI = false;   // overlay de depuración de la IA (tecla O)
 let escalated = false;   // al agotarse el tiempo: cacería permanente
+const ab = ABL.createAbilities();   // energía + habilidades del fantasma
 
 function groundHeight() { return 0; }
 // Colisión del jugador contra el grid FINO: recorre toda la huella del jugador
@@ -685,6 +687,20 @@ function pushRecent(h) {
   }
 }
 
+// Celda transitable a la que mira el fantasma: marcha hacia delante (yaw) hasta
+// `maxCells` o hasta toparse con muro; devuelve la última celda abierta.
+function aimCell(maxCells) {
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  let last = cellOf(pos.x, pos.z);
+  for (let s = 1; s <= maxCells; s++) {
+    const wx = pos.x + fx * s * CELL, wz = pos.z + fz * s * CELL;
+    const [gx, gz] = cellOf(wx, wz);
+    if (isWall(gx, gz)) break;
+    last = [gx, gz];
+  }
+  return last;
+}
+
 // ============================================================
 //  Bucle
 // ============================================================
@@ -696,6 +712,10 @@ function update(dt) {
   if (roarCd > 0) roarCd = Math.max(0, roarCd - dt);
   if (revealTimer > 0) revealTimer = Math.max(0, revealTimer - dt);
   const hunting = updateHunt(dt);
+  // Energía: gana con el tiempo + bonus si hay un superviviente cerca (acecho).
+  let nearSurvivor = false;
+  for (const h of hunters) { if (h.alive && Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) < ABL.AB.SENSE_RANGE) { nearSurvivor = true; break; } }
+  ABL.tickEnergy(ab, dt, { nearSurvivor });
   updateBlackboard(dt);
   runCoordinator(dt, hunting);
   FRONTIER = AIB.computeFrontier(BB, isOpenCell);   // 1× por frame (lo leen los 8 agentes)
