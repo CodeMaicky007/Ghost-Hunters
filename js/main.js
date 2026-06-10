@@ -731,7 +731,7 @@ function useTrap() {
 }
 function useDecoy() {
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
-  if (ABL.activate(ab, ABL.KEY.DECOY, [gx, gz])) { AIB.addEvent(BB, 'apparition', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
+  if (ABL.activate(ab, ABL.KEY.DECOY, [gx, gz])) { AIB.addEvent(BB, 'apparition', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); tone({ type: 'triangle', f0: 320, f1: 180, dur: 0.6, vol: 0.35 }); }
 }
 function useSpectral() { ABL.activate(ab, ABL.KEY.SPECTRAL, null, { hunting: hunt.active > 0 }); }
 function tryStartHunt() { if (hunt.active <= 0 && ABL.huntReady(ab)) { ABL.spendForHunt(ab); startHunt(); } }
@@ -801,6 +801,20 @@ function update(dt) {
     const tm = trapMeshes[i];
     if (!ab.traps.some((t) => t.gx === tm.gx && t.gz === tm.gz)) { scene.remove(tm.mesh); trapMeshes.splice(i, 1); }
   }
+  // Señuelo (Aparición): luz/sprite temporal; atrae y asusta a los cercanos.
+  if (ab.decoy) {
+    const [dwx, dwz] = worldOf(ab.decoy.gx, ab.decoy.gz);
+    if (!decoyMesh) {
+      decoyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), new THREE.MeshBasicMaterial({ color: 0xc77dff, transparent: true, opacity: 0.7 }));
+      scene.add(decoyMesh);
+    }
+    decoyMesh.position.set(dwx, EYE, dwz);
+    decoyMesh.material.opacity = 0.4 + 0.3 * Math.sin(performance.now() * 0.01);
+    for (const h of hunters) {
+      if (!h.alive) continue;
+      if (Math.hypot(h.pos.x - dwx, h.pos.z - dwz) < ABL.AB.SENSE_RANGE) { h.stress = Math.min(1, h.stress + 0.3 * dt); h.next = null; }
+    }
+  } else if (decoyMesh) { scene.remove(decoyMesh); decoyMesh = null; }
   updateHUD(hunting); drawMinimap(); checkEnd();
 }
 let last = performance.now();
