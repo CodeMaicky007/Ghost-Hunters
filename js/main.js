@@ -45,6 +45,7 @@ const SCARE_RANGE = 6;
 const SCARE_FLEE = 4;
 const ROAR_CD = 8;
 const REVEAL_DUR = 5;
+const ROAR_INTERRUPT_WINDOW = 0.3;   // ventana (s) tras un rugido en la que interrumpe la canalización
 
 // ============================================================
 //  Mapa de ocupación — fallback procedural; se sustituye por el
@@ -393,7 +394,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   let trig = null;
   if (hunting) trig = 'hunt';
   else if (h.panic || h.fear > 0.7) trig = 'scared';
-  else if (h.role === AIB.ROLES.REGROUP) trig = 'regroup';
+  else if (ritual.phase === RIT.PHASE.CHANNEL && (h.role === RIT.RROLE.CHANNELER || h.role === RIT.RROLE.DEFEND)) trig = 'regroup';
   if (trig) {
     const b = AIB.barkFor(h, trig, NOW_SEC, AIB.AI);
     if (b) { h.lastBarkT = b.t; h.model.showBark(b.text); if (h.fear > 0.5) h.model.glanceBack(); }
@@ -455,7 +456,6 @@ let BB = AIB.createBlackboard();
 const VISION_R = AIB.AI.VISION_RADIUS;
 let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
-let rendezvous = null;        // celda de reunión para REGROUP
 let DISPERSAL = null;
 function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); for (const h of hunters) if (h.alive) h.model.setSpectral(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
@@ -531,7 +531,7 @@ function drawMinimap() {
   if (revealTimer > 0 && revealedBot && revealedBot.alive) { mmCtx.fillStyle = '#ff3b3b'; mmCtx.beginPath(); mmCtx.arc((revealedBot.pos.x / CELL) * cs, (revealedBot.pos.z / CELL) * cs, 4, 0, 7); mmCtx.fill(); }
   mmCtx.fillStyle = '#c77dff'; mmCtx.beginPath(); mmCtx.arc((pos.x / CELL) * cs, (pos.z / CELL) * cs, 3, 0, 7); mmCtx.fill();
   if (debugAI) {
-    const COLR = { EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', GUARD: '#ffae42', SCAVENGE: '#c77dff', REGROUP: '#ff3b3b' };
+    const COLR = { EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', FETCH: '#ffd166', GUARD: '#ffae42', CHANNELER: '#c77dff', DEFEND: '#37d67a', DISTRACT: '#ff3b3b' };
     for (const h of hunters) {
       if (!h.alive) continue;
       mmCtx.fillStyle = COLR[h.role] || '#fff';
@@ -597,7 +597,7 @@ let FRONTIER = [];                       // frontera de exploración (1× por fr
 let lastGhostGX = -1, lastGhostGZ = -1;  // celda del fantasma para throttle de dispersión
 let NOW_SEC = 0;                         // performance.now()/1000 muestreado 1× por frame
 
-// Corre el coordinador cada COORD_PERIOD s: amenaza -> roles -> rendezvous.
+// Corre el coordinador cada COORD_PERIOD s: amenaza -> reparto de roles de fase.
 function runCoordinator(dt, hunting) {
   coordTimer -= dt;
   if (coordTimer > 0) return;
@@ -615,9 +615,6 @@ function runCoordinator(dt, hunting) {
     ritual, threat
   );
   for (const h of hunters) if (roles.has(h.id)) h.role = roles.get(h.id);
-  // Rendezvous = celda del aliado más valiente (líder), para REGROUP.
-  const leader = aliveList.slice().sort((a, b) => b.bravery - a.bravery)[0];
-  rendezvous = leader ? cellOf(leader.pos.x, leader.pos.z) : null;
 }
 
 // Construye celdas candidatas {gx,gz,bias} según el rol del agente.
