@@ -400,7 +400,14 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   }
   h.model.update(dt);
 }
-function killHunter(h) { h.alive = false; { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'death', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); } h.model.setSpectral(false); h.model.play('Death'); h.model.update(0); sfx.kill(); checkEnd(); }
+function killHunter(h) {
+  h.alive = false;
+  { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'death', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); }
+  h.model.setSpectral(false); h.model.play('Death'); h.model.update(0); sfx.kill();
+  { const [gx, gz] = cellOf(h.pos.x, h.pos.z); RIT.dropCarried(ritual, h.id, gx, gz); }
+  if (ritual.phase === RIT.PHASE.CHANNEL) ritual.channel = Math.max(0, ritual.channel - 0.1); // penalización por matar a un canalizador
+  checkEnd();
+}
 
 // ============================================================
 //  Estado del jugador (un solo piso)
@@ -430,7 +437,11 @@ function roar() {
   revealedBot = best; revealTimer = REVEAL_DUR;
   for (const h of hunters) {
     if (!h.alive) continue;
-    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= SCARE_RANGE) { h.flee = SCARE_FLEE; h.next = null; }
+    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= SCARE_RANGE) {
+      h.flee = SCARE_FLEE; h.next = null;
+      const [gx, gz] = cellOf(h.pos.x, h.pos.z);
+      RIT.dropCarried(ritual, h.id, gx, gz); // si carga algo, lo suelta aquí
+    }
   }
 }
 
