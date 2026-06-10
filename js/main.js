@@ -363,7 +363,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   else if (h.panic || h.fear > 0.7) trig = 'scared';
   else if (h.role === AIB.ROLES.REGROUP) trig = 'regroup';
   if (trig) {
-    const b = AIB.barkFor(h, trig, performance.now() / 1000, AIB.AI);
+    const b = AIB.barkFor(h, trig, NOW_SEC, AIB.AI);
     if (b) { h.lastBarkT = b.t; h.model.showBark(b.text); if (h.fear > 0.5) h.model.glanceBack(); }
   }
   h.model.update(dt);
@@ -474,7 +474,6 @@ function drawMinimap() {
   if (revealTimer > 0 && revealedBot && revealedBot.alive) { mmCtx.fillStyle = '#ff3b3b'; mmCtx.beginPath(); mmCtx.arc((revealedBot.pos.x / CELL) * cs, (revealedBot.pos.z / CELL) * cs, 4, 0, 7); mmCtx.fill(); }
   mmCtx.fillStyle = '#c77dff'; mmCtx.beginPath(); mmCtx.arc((pos.x / CELL) * cs, (pos.z / CELL) * cs, 3, 0, 7); mmCtx.fill();
   if (debugAI) {
-    const cs = MM / COLS;
     const COLR = { EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', GUARD: '#ffae42', SCAVENGE: '#c77dff', REGROUP: '#ff3b3b' };
     for (const h of hunters) {
       if (!h.alive) continue;
@@ -537,6 +536,10 @@ function updateBlackboard(dt) {
 
 // Centro del mapa en celdas (para dividir alas de exploración).
 const MID_X = () => Math.floor(COLS / 2);
+// Estado por-frame compartido por la IA (se calcula una vez en update()).
+let FRONTIER = [];                       // frontera de exploración (1× por frame)
+let lastGhostGX = -1, lastGhostGZ = -1;  // celda del fantasma para throttle de dispersión
+let NOW_SEC = 0;                         // performance.now()/1000 muestreado 1× por frame
 
 // Corre el coordinador cada COORD_PERIOD s: amenaza -> roles -> rendezvous.
 function runCoordinator(dt, hunting) {
@@ -546,7 +549,9 @@ function runCoordinator(dt, hunting) {
   const aliveList = hunters.filter((h) => h.alive);
   const avgFear = aliveList.length ? aliveList.reduce((s, h) => s + h.fear, 0) / aliveList.length : 0;
   const deaths = hunters.filter((h) => !h.alive).length;
-  const recentEvents = BB.events.filter((e) => GAME.timeLeft - e.t < 5).length;
+  // GAME.timeLeft es CUENTA ATRÁS: un evento reciente tiene e.t algo mayor que el
+  // tiempo actual, así que "reciente" = (e.t - GAME.timeLeft) pequeño.
+  const recentEvents = BB.events.filter((e) => e.t - GAME.timeLeft < 5).length;
   const threat = AIB.computeThreat({ hunting, recentEvents, deaths, avgFear });
   const roles = AIB.assignRoles(hunters.map((h) => ({ id: h.id, alive: h.alive, bravery: h.bravery })), threat);
   for (const h of hunters) if (roles.has(h.id)) h.role = roles.get(h.id);
@@ -557,7 +562,7 @@ function runCoordinator(dt, hunting) {
 
 // Construye celdas candidatas {gx,gz,bias} según el rol del agente.
 function buildCandidates(h) {
-  const frontier = AIB.computeFrontier(BB, isOpenCell);
+  const frontier = FRONTIER;   // calculado 1× por frame en update()
   const objs = [...BB.objectives.values()].filter((o) => !stations[o.idx].done);
   const midx = MID_X();
   const near = (cell) => -(Math.abs(cell.gx - cellOf(h.pos.x, h.pos.z)[0]) + Math.abs(cell.gz - cellOf(h.pos.x, h.pos.z)[1]));
@@ -610,21 +615,27 @@ function pushRecent(h) {
 function update(dt) {
   if (GAME.state !== 'playing') return;
   GAME.timeLeft -= dt;
+  NOW_SEC = performance.now() / 1000;   // reloj monótono muestreado 1× por frame
   if (roarCd > 0) roarCd = Math.max(0, roarCd - dt);
   if (revealTimer > 0) revealTimer = Math.max(0, revealTimer - dt);
   const hunting = updateHunt(dt);
   updateBlackboard(dt);
   runCoordinator(dt, hunting);
+  FRONTIER = AIB.computeFrontier(BB, isOpenCell);   // 1× por frame (lo leen los 8 agentes)
   // En cacería, reparte celdas de escape distintas (lejos del fantasma).
+  // Recalcula solo cuando el fantasma cambia de celda (no cada frame).
   if (hunting) {
-    const aliveAgents = hunters.filter((h) => h.alive).map((h) => { const [gx, gz] = cellOf(h.pos.x, h.pos.z); return { id: h.id, gx, gz }; });
     const [ggx, ggz] = cellOf(pos.x, pos.z);
-    const safe = REACH.list
-      .filter(([gx, gz]) => (Math.abs(gx - ggx) + Math.abs(gz - ggz)) > 6)
-      .map(([gx, gz]) => ({ gx, gz }));
-    DISPERSAL = AIB.dispersalTargets(aliveAgents, { gx: ggx, gz: ggz }, safe, AIB.AI);
+    if (!DISPERSAL || ggx !== lastGhostGX || ggz !== lastGhostGZ) {
+      lastGhostGX = ggx; lastGhostGZ = ggz;
+      const aliveAgents = hunters.filter((h) => h.alive).map((h) => { const [gx, gz] = cellOf(h.pos.x, h.pos.z); return { id: h.id, gx, gz }; });
+      const safe = REACH.list
+        .filter(([gx, gz]) => (Math.abs(gx - ggx) + Math.abs(gz - ggz)) > 6)
+        .map(([gx, gz]) => ({ gx, gz }));
+      DISPERSAL = AIB.dispersalTargets(aliveAgents, { gx: ggx, gz: ggz }, safe, AIB.AI);
+    }
   } else {
-    DISPERSAL = null;
+    DISPERSAL = null; lastGhostGX = -1; lastGhostGZ = -1;
   }
   moveGhost(dt);
   applyAtmosphere();
