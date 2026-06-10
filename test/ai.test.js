@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { cellKey, parseKey, createBlackboard } from '../js/ai.js';
 import { discoverAround, computeFrontier } from '../js/ai.js';
 import { bumpDanger, addEvent, decayDanger, dangerAt } from '../js/ai.js';
+import { deriveFear, updateFear } from '../js/ai.js';
 
 const openAll = () => true;
 
@@ -71,4 +72,33 @@ test('decayDanger reduce con el tiempo y borra lo despreciable', () => {
   assert.ok(Math.abs(dangerAt(bb, 0, 0) - 0.5) < 1e-9);
   decayDanger(bb, 5, 0.5, 0.05); // *0.5^5 -> ~0.0156 < min -> borrado
   assert.equal(bb.danger.has('0,0'), false);
+});
+
+test('deriveFear sube con estrés/baja cordura y baja con valentía', () => {
+  assert.ok(deriveFear(0, 1, 0) === 0);
+  const a = deriveFear(0.8, 0.2, 0); // mucho estrés, poca cordura
+  const b = deriveFear(0.8, 0.2, 1); // igual pero muy valiente
+  assert.ok(a > b);
+  assert.ok(a > 0 && a <= 1);
+});
+
+test('updateFear entra en PÁNICO con estrés alto y cordura baja', () => {
+  const ag = { stress: 0.86, sanity: 0.15, bravery: 0, panic: false };
+  const r = updateFear(ag, {}, 0); // dt=0: sin deriva, evalúa umbrales
+  assert.equal(r.panic, true);
+});
+
+test('updateFear sale de pánico cuando el miedo baja (histéresis)', () => {
+  const ag = { stress: 0.3, sanity: 0.9, bravery: 0.5, panic: true };
+  const r = updateFear(ag, {}, 0);
+  assert.equal(r.panic, false);
+});
+
+test('updateFear acumula estrés cerca del fantasma y lo calma agrupado+seguro', () => {
+  const ag = { stress: 0.2, sanity: 1, bravery: 0, panic: false };
+  const up = updateFear(ag, { nearGhost: true }, 1);
+  assert.ok(up.stress > 0.2);
+  const ag2 = { stress: 0.5, sanity: 1, bravery: 0, panic: false };
+  const down = updateFear(ag2, { grouped: true, safe: true }, 1);
+  assert.ok(down.stress < 0.5);
 });
