@@ -312,7 +312,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   h.model.setPos(h.pos.x, 0, h.pos.z);
   h.model.update(dt);
 }
-function killHunter(h) { h.alive = false; h.model.setSpectral(false); h.model.play('Death'); h.model.update(0); sfx.kill(); checkEnd(); }
+function killHunter(h) { h.alive = false; { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'death', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); } h.model.setSpectral(false); h.model.play('Death'); h.model.update(0); sfx.kill(); checkEnd(); }
 
 // ============================================================
 //  Estado del jugador (un solo piso)
@@ -335,6 +335,7 @@ addEventListener('mousedown', (e) => { if (e.button === 0) roar(); });
 function roar() {
   if (roarCd > 0 || GAME.state !== 'playing' || document.pointerLockElement !== canvasEl) return;
   roarCd = ROAR_CD; sfx.roar();
+  { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'roar', gx, gz, GAME.timeLeft); }
   let best = null, bd = -1;
   for (const h of hunters) { if (!h.alive) continue; const d = (h.pos.x - pos.x) ** 2 + (h.pos.z - pos.z) ** 2; if (d > bd) { bd = d; best = h; } }
   revealedBot = best; revealTimer = REVEAL_DUR;
@@ -355,7 +356,7 @@ let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let rendezvous = null;        // celda de reunión para REGROUP
 let DISPERSAL = null;
-function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); for (const h of hunters) if (h.alive) h.model.setSpectral(true); }
+function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); for (const h of hunters) if (h.alive) h.model.setSpectral(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
   if (hunt.active > 0) { hunt.active -= dt; if (hunt.active <= 0) endHunt(); }
@@ -443,6 +444,26 @@ function moveGhost(dt) {
   aura.position.set(pos.x, h + EYE, pos.z);
 }
 
+// Predicado de celda abierta para la IA (grid de IA, no el fino de colisión).
+const isOpenCell = (gx, gz) => !isWall(gx, gz);
+
+// Cada frame: los vivos descubren a su alrededor; las estaciones cuya celda ya
+// se descubrió pasan a ser objetivos conocidos; el peligro decae.
+function updateBlackboard(dt) {
+  for (const h of hunters) {
+    if (!h.alive) continue;
+    const [gx, gz] = cellOf(h.pos.x, h.pos.z);
+    AIB.discoverAround(BB, gx, gz, VISION_R, isOpenCell);
+  }
+  stations.forEach((s, i) => {
+    const k = AIB.cellKey(s.gx, s.gz);
+    if (BB.discovered.has(k) && !BB.objectives.has(k)) {
+      BB.objectives.set(k, { gx: s.gx, gz: s.gz, idx: i });
+    }
+  });
+  AIB.decayDanger(BB, dt);
+}
+
 // ============================================================
 //  Bucle
 // ============================================================
@@ -452,6 +473,7 @@ function update(dt) {
   if (roarCd > 0) roarCd = Math.max(0, roarCd - dt);
   if (revealTimer > 0) revealTimer = Math.max(0, revealTimer - dt);
   const hunting = updateHunt(dt);
+  updateBlackboard(dt);
   moveGhost(dt);
   applyAtmosphere();
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
