@@ -81,3 +81,31 @@ export function discoverableCells(ritual) {
   for (const o of ritual.objects) if (o.status === OBJ.ON_MAP) cells.push([o.gx, o.gz]);
   return cells;
 }
+
+// Reparte roles según la fase. agents: [{id, alive, bravery, gx, gz}]. threat 0..1.
+// GATHER: 4 FETCH (los más valientes) + EXPLORE_A/B; el portador siempre FETCH.
+// CHANNEL: needChannelers CHANNEL (más cercanos al altar), resto DEFEND, y 1-2
+// DISTRACT (los más valientes) salvo amenaza alta.
+export function assignRitualRoles(agents, ritual, threat) {
+  const out = new Map();
+  const alive = agents.filter((a) => a.alive);
+
+  if (ritual.phase === PHASE.CHANNEL) {
+    const dA = (a) => Math.abs(a.gx - ritual.altar.gx) + Math.abs(a.gz - ritual.altar.gz);
+    const byNear = alive.slice().sort((x, y) => dA(x) - dA(y));
+    const need = Math.min(ritual.needChannelers, byNear.length);
+    byNear.forEach((a, i) => out.set(a.id, i < need ? RROLE.CHANNEL : RROLE.DEFEND));
+    const rest = byNear.slice(need).sort((x, y) => y.bravery - x.bravery);
+    const nDistract = threat >= 1 ? 0 : (rest.length >= 3 ? 2 : (rest.length >= 1 ? 1 : 0));
+    for (let i = 0; i < nDistract; i++) out.set(rest[i].id, RROLE.DISTRACT);
+    return out;
+  }
+
+  // GATHER
+  const sorted = alive.slice().sort((a, b) => b.bravery - a.bravery);
+  const order = [RROLE.FETCH, RROLE.FETCH, RROLE.EXPLORE_A, RROLE.EXPLORE_B];
+  const n = sorted.length || 1;
+  sorted.forEach((a, i) => out.set(a.id, order[Math.min(3, Math.floor((i * 4) / n))]));
+  for (const a of alive) if (objectCarriedBy(ritual, a.id)) out.set(a.id, RROLE.FETCH);
+  return out;
+}

@@ -116,3 +116,44 @@ test('discoverableCells da altar + objetos ON_MAP (no los cargados/depositados)'
   const cells = discoverableCells(r).map(([x, z]) => x + ',' + z).sort();
   assert.deepEqual(cells, ['4,4', '5,6']); // altar + objeto 1 ON_MAP
 });
+
+import { assignRitualRoles, RROLE } from '../js/ritual.js';
+
+const mkAgents = (n) => Array.from({ length: n }, (_, i) => ({ id: i, alive: true, bravery: i / (n - 1), gx: i, gz: 0 }));
+
+test('GATHER: 8 vivos -> 4 FETCH + 2 EXPLORE_A + 2 EXPLORE_B; portador forzado a FETCH', () => {
+  const r = createRitual([[1, 1], [2, 2]], [0, 0]);
+  const agents = mkAgents(8);
+  const roles = assignRitualRoles(agents, r, 0);
+  const counts = {};
+  for (const v of roles.values()) counts[v] = (counts[v] || 0) + 1;
+  assert.equal(counts[RROLE.FETCH], 4);
+  assert.equal(counts[RROLE.EXPLORE_A], 2);
+  assert.equal(counts[RROLE.EXPLORE_B], 2);
+  // un portador siempre FETCH aunque por valentía cayera en EXPLORE
+  pickup(r, 0, 7);
+  const roles2 = assignRitualRoles(agents, r, 0);
+  assert.equal(roles2.get(7), RROLE.FETCH);
+});
+
+test('CHANNEL: needChannelers como CHANNEL (los más cercanos al altar), resto DEFEND/DISTRACT', () => {
+  const r = createRitual([[1, 1], [2, 2]], [0, 0]);
+  pickup(r, 0, 1); depositCarried(r, 1); pickup(r, 1, 2); depositCarried(r, 2); // -> CHANNEL
+  // agentes a distancias crecientes del altar (gx); needChannelers=2
+  const agents = mkAgents(6);
+  const roles = assignRitualRoles(agents, r, 0);
+  const counts = {};
+  for (const v of roles.values()) counts[v] = (counts[v] || 0) + 1;
+  assert.equal(counts[RROLE.CHANNEL], 2);
+  assert.equal(roles.get(0), RROLE.CHANNEL); // el más cercano (gx=0)
+  assert.equal(roles.get(1), RROLE.CHANNEL);
+  assert.ok((counts[RROLE.DEFEND] || 0) + (counts[RROLE.DISTRACT] || 0) === 4);
+});
+
+test('CHANNEL bajo amenaza alta: sin DISTRACT', () => {
+  const r = createRitual([[1, 1]], [0, 0]);
+  pickup(r, 0, 1); depositCarried(r, 1); // -> CHANNEL
+  const agents = mkAgents(6);
+  const roles = assignRitualRoles(agents, r, 1); // threat alto
+  assert.ok(![...roles.values()].includes(RROLE.DISTRACT));
+});
