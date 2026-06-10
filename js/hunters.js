@@ -30,6 +30,7 @@ export class HunterModel {
     this._bubble = null;       // sprite de texto efímero
     this._bubbleT = 0;         // tiempo restante de la burbuja
     this._lookBack = 0;        // temporizador de "mirar atrás"
+    this._spectral = false;    // estado espectral aplicado (evita reclonar cada frame)
   }
 
   play(clipName, opts = {}) {
@@ -62,6 +63,8 @@ export class HunterModel {
 
   // visión espectral: glow + visible a través de muros
   setSpectral(on) {
+    if (on === this._spectral) return; // idempotente: no reclona materiales cada frame
+    this._spectral = on;
     for (const [mesh, orig] of this._origMats) {
       if (on) {
         mesh.material = orig.clone();

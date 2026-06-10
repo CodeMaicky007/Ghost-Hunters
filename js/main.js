@@ -39,8 +39,6 @@ const RITUAL_SPREAD = 18;   // radio (celdas) de la región donde caen altar+obj
 const HUNTER_SPEED = 2.8;
 const HUNTER_FLEE_SPEED = 3.6;
 
-const HUNT_EVERY = 40;
-const HUNT_DUR = 12;
 const KILL_RANGE = 1.8;
 
 const SCARE_RANGE = 6;
@@ -603,7 +601,7 @@ function drawMinimap() {
 function applyAtmosphere() {
   const lit = hunt.active <= 0;
   ambient.color.setHex(0xbda86a);
-  const flicker = lit ? 1 : (Math.random() < 0.2 ? 0.0 : 0.06); // parpadeo en cacería
+  const flicker = lit ? 1 : (Math.sin(performance.now() * 0.025) > 0.6 ? 0.0 : 0.06); // parpadeo por tiempo (no por frame)
   ambient.intensity = lit ? 0.85 : flicker;
   hemi.intensity = lit ? 0.5 : 0.02;
   const fogc = 0x1c1808; scene.fog.color.setHex(fogc); scene.background.setHex(fogc);
@@ -790,7 +788,9 @@ function update(dt) {
   // Energía: gana con el tiempo + bonus si hay un superviviente cerca (acecho).
   let nearSurvivor = false;
   for (const h of hunters) { if (h.alive && Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) < ABL.AB.SENSE_RANGE) { nearSurvivor = true; break; } }
+  const energyBefore = ab.energy;
   ABL.tickEnergy(ab, dt, { nearSurvivor });
+  if (hunting) ab.energy = energyBefore; // no se acumula energía durante la cacería (no encadenar cacerías)
   if (senseGain) {
     let dmin = Infinity;
     for (const h of hunters) if (h.alive) dmin = Math.min(dmin, Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z));
@@ -831,7 +831,7 @@ function update(dt) {
   // Quita las mallas de trampas que ya caducaron en el estado puro.
   for (let i = trapMeshes.length - 1; i >= 0; i--) {
     const tm = trapMeshes[i];
-    if (!ab.traps.some((t) => t.gx === tm.gx && t.gz === tm.gz)) { scene.remove(tm.mesh); trapMeshes.splice(i, 1); }
+    if (!ab.traps.some((t) => t.gx === tm.gx && t.gz === tm.gz)) { scene.remove(tm.mesh); tm.mesh.geometry.dispose(); tm.mesh.material.dispose(); trapMeshes.splice(i, 1); }
   }
   // Señuelo (Aparición): luz/sprite temporal; atrae y asusta a los cercanos.
   if (ab.decoy) {
@@ -846,7 +846,7 @@ function update(dt) {
       if (!h.alive) continue;
       if (Math.hypot(h.pos.x - dwx, h.pos.z - dwz) < ABL.AB.SENSE_RANGE) { h.stress = Math.min(1, h.stress + 0.3 * dt); h.next = null; }
     }
-  } else if (decoyMesh) { scene.remove(decoyMesh); decoyMesh = null; }
+  } else if (decoyMesh) { scene.remove(decoyMesh); decoyMesh.geometry.dispose(); decoyMesh.material.dispose(); decoyMesh = null; }
   // Visión espectral: revela a los supervivientes a través de muros solo mientras
   // dure la habilidad (que solo se activa en cacería).
   const seeThrough = ab.spectral > 0;
