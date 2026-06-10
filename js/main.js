@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { loadAllAssets } from './assets.js';
 import { placeEnv } from './env.js';
 import { bakeGrid } from './grid.js';
-import { collidesBoxGrid, parryChance, rollParry } from './logic.js';
+import { collidesBoxGrid, parryChance, rollParry, PARRY_DEFAULTS } from './logic.js';
 import { HunterModel } from './hunters.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
@@ -47,7 +47,7 @@ const ROAR_CD = 8;
 const REVEAL_DUR = 5;
 const ROAR_INTERRUPT_WINDOW = 0.3;   // ventana (s) tras un rugido en la que interrumpe la canalización
 
-const PARRY = { base: 0.25, perBravery: 0.5, panicMul: 0.3 };
+const PARRY = PARRY_DEFAULTS;   // fuente única en logic.js (tuneable aquí si diverge)
 const STUN_DUR = 3;      // s de aturdimiento del fantasma tras un parry
 const STUN_SLOW = 0.4;   // multiplicador de velocidad mientras estás aturdido
 const PARRY_FLEE = 3;    // s que huye el superviviente que paró
@@ -515,7 +515,7 @@ let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
 function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
-  for (const h of hunters) if (h.alive) h.parryUsed = false;
+  for (const h of hunters) if (h.alive) h.parryUsed = false; // un parry por cacería (muertos: irrelevante)
 }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
@@ -531,7 +531,7 @@ function checkEnd() {
   // El tiempo ya NO da victoria al fantasma: dispara escalada (ver updateHunt).
 }
 function endGame(win, msg) {
-  GAME.state = win ? 'win' : 'lose'; endHunt(); document.exitPointerLock(); win ? sfx.win() : sfx.lose();
+  GAME.state = win ? 'win' : 'lose'; stun = 0; endHunt(); document.exitPointerLock(); win ? sfx.win() : sfx.lose();
   const t = document.getElementById('endTitle'); t.textContent = win ? '👻 VICTORIA' : '💀 DERROTA'; t.className = win ? 'win' : 'lose';
   document.getElementById('endMsg').textContent = msg; document.getElementById('endscreen').classList.remove('hidden');
 }

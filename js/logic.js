@@ -58,8 +58,11 @@ export function collidesBoxGrid(map, cols, rows, cell, x, z, r) {
   return false;
 }
 
+// Ajustes por defecto del parry (fuente única; la integración los reutiliza).
+export const PARRY_DEFAULTS = { base: 0.25, perBravery: 0.5, panicMul: 0.3 };
+
 // Probabilidad de parry (0..1) según pericia (valentía). El pánico la hunde.
-export function parryChance(bravery, panic, p = { base: 0.25, perBravery: 0.5, panicMul: 0.3 }) {
+export function parryChance(bravery, panic, p = PARRY_DEFAULTS) {
   const c = p.base + p.perBravery * bravery;
   const v = panic ? c * p.panicMul : c;
   return v < 0 ? 0 : v > 1 ? 1 : v;
