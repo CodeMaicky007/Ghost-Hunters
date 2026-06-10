@@ -717,6 +717,8 @@ function useTeleport() {
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
   ABL.activate(ab, ABL.KEY.TELEPORT, [gx, gz]);
   const [wx, wz] = worldOf(gx, gz); pos.x = wx; pos.z = wz;
+  for (const h of hunters) h.next = null; // sus rutas hacia tu antigua posición caducan
+  tone({ type: 'sine', f0: 600, f1: 120, dur: 0.35, vol: 0.4 });
 }
 function useTrap() {
   const [gx, gz] = cellOf(pos.x, pos.z);
