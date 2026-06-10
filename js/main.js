@@ -744,6 +744,8 @@ function spawnTrapMesh(gx, gz) {
 function useTeleport() {
   if (!ABL.canActivate(ab, ABL.KEY.TELEPORT)) return;
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
+  const [cgx, cgz] = cellOf(pos.x, pos.z);
+  if (gx === cgx && gz === cgz) return; // miras a un muro pegado: no malgastes la habilidad
   ABL.activate(ab, ABL.KEY.TELEPORT, [gx, gz]);
   const [wx, wz] = worldOf(gx, gz); pos.x = wx; pos.z = wz;
   for (const h of hunters) h.next = null; // sus rutas hacia tu antigua posición caducan
@@ -755,6 +757,8 @@ function useTrap() {
 }
 function useDecoy() {
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
+  const [cgx, cgz] = cellOf(pos.x, pos.z);
+  if (gx === cgx && gz === cgz) return; // sin sitio a la vista donde proyectar el señuelo
   if (ABL.activate(ab, ABL.KEY.DECOY, [gx, gz])) { AIB.addEvent(BB, 'apparition', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); tone({ type: 'triangle', f0: 320, f1: 180, dur: 0.6, vol: 0.35 }); }
 }
 function useSpectral() { ABL.activate(ab, ABL.KEY.SPECTRAL, null, { hunting: hunt.active > 0 }); }
@@ -789,8 +793,8 @@ function update(dt) {
   let nearSurvivor = false;
   for (const h of hunters) { if (h.alive && Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) < ABL.AB.SENSE_RANGE) { nearSurvivor = true; break; } }
   const energyBefore = ab.energy;
-  ABL.tickEnergy(ab, dt, { nearSurvivor });
-  if (hunting) ab.energy = energyBefore; // no se acumula energía durante la cacería (no encadenar cacerías)
+  ABL.tickEnergy(ab, dt, { nearSurvivor }); // cooldowns y visión espectral siguen corriendo en cacería
+  if (hunting) ab.energy = energyBefore;     // solo se congela la energía (no encadenar cacerías)
   if (senseGain) {
     let dmin = Infinity;
     for (const h of hunters) if (h.alive) dmin = Math.min(dmin, Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z));
