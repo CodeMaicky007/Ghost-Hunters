@@ -3,7 +3,7 @@
 Mini-juego web de terror asimétrico en **primera persona** para la *Didáctico Jam 2026* (tema: **AL REVÉS**).
 Juegas como **fantasma** con los **controles de movimiento invertidos** y la **vista en negativo**, sobreviviendo a cazadores controlados por IA.
 
-> **Estado:** prototipo de feel (D1). Valida la mecánica estrella. Sin IA / herramientas / sonido todavía.
+> **Estado:** IA de 8 supervivientes (R1): niebla de descubrimiento, coordinador + utilidad, miedo/pánico recuperable, barks + lenguaje corporal, dispersión en cacería. (Verificado: `node --test` 36/36 + navegador headless sin errores de consola.)
 
 ## El tema "AL REVÉS": inversión como evento (no constante)
 
@@ -33,8 +33,9 @@ Luego abre <http://localhost:8080> y haz click en **JUGAR**.
 |---|---|
 | Ratón | Mirar (normal — NUNCA se invierte) |
 | W A S D | Mover — clásico, **salvo durante un glitch** (entonces va al revés) |
-| `G` | Forzar un glitch "AL REVÉS" (para probar el feel) |
+| `G` | Forzar una **cacería** (para probar el feel) |
 | `N` | Alternar vista negativa total (experimento — deja la escena en blanco) |
+| `O` | Overlay de depuración de la IA (roles/estrés/celdas descubiertas) |
 | `Esc` | Soltar el ratón |
 
 ## Tecnología
