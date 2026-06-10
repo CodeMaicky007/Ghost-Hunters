@@ -416,6 +416,7 @@ const pos = new THREE.Vector3(CELL, EYE, CELL);
 let yaw = 0, pitch = 0, currentFloor = 0;
 let roarCd = 0, revealTimer = 0, revealedBot = null;
 let debugAI = false;   // overlay de depuración de la IA (tecla O)
+let escalated = false;   // al agotarse el tiempo: cacería permanente
 
 function groundHeight() { return 0; }
 // Colisión del jugador contra el grid FINO: recorre toda la huella del jugador
@@ -459,6 +460,7 @@ let DISPERSAL = null;
 function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); for (const h of hunters) if (h.alive) h.model.setSpectral(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
+  if (escalated) { hunt.active = HUNT_DUR; for (const h of hunters) if (h.alive) h.model.setSpectral(true); return true; }
   if (hunt.active > 0) { hunt.active -= dt; if (hunt.active <= 0) endHunt(); }
   else { huntTimer -= dt; if (huntTimer <= 0) { startHunt(); huntTimer = HUNT_EVERY; } }
   return hunt.active > 0;
@@ -466,9 +468,9 @@ function updateHunt(dt) {
 const GAME = { state: 'playing', timeLeft: MATCH_TIME };
 function checkEnd() {
   if (GAME.state !== 'playing') return;
-  if (hunters.every((h) => !h.alive)) return endGame(true, 'Eliminaste a todos los investigadores.');
-  if (stations.every((s) => s.done)) return endGame(false, 'Apagaron todos los monitores y escaparon.');
-  if (GAME.timeLeft <= 0) return endGame(true, 'Aguantaste: no terminaron a tiempo.');
+  if (ritual && ritual.phase === RIT.PHASE.DONE) return endGame(false, 'El ritual te ha destruido.');
+  if (hunters.every((h) => !h.alive)) return endGame(true, 'Eliminaste a todos antes del ritual.');
+  // El tiempo ya NO da victoria al fantasma: dispara escalada (ver updateHunt).
 }
 function endGame(win, msg) {
   GAME.state = win ? 'win' : 'lose'; endHunt(); document.exitPointerLock(); win ? sfx.win() : sfx.lose();
@@ -675,6 +677,7 @@ function pushRecent(h) {
 function update(dt) {
   if (GAME.state !== 'playing') return;
   GAME.timeLeft -= dt;
+  if (GAME.timeLeft <= 0 && !escalated) { escalated = true; GAME.timeLeft = 0; if (hunt.active <= 0) startHunt(); }
   NOW_SEC = performance.now() / 1000;   // reloj monótono muestreado 1× por frame
   if (roarCd > 0) roarCd = Math.max(0, roarCd - dt);
   if (revealTimer > 0) revealTimer = Math.max(0, revealTimer - dt);
