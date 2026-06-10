@@ -51,7 +51,7 @@ export function createBlackboard() {
     objectives: new Map(),  // clave -> {gx, gz, idx} (idx en stations[])
     danger: new Map(),      // clave -> score
     events: [],             // {type, gx, gz, t}
-    roster: [],             // estado público por agente (lo llena la integración)
+    roster: [],             // estado público por agente. TODO R2: {id,alive,gx,gz,role,stress}/tick
   };
 }
 
@@ -226,6 +226,8 @@ export function dispersalTargets(agents, ghost, safeCells, p = AI) {
 }
 
 // Tabla de barks: clave de trigger -> {text, prio}. prio>=4 ignora cooldown.
+// Cableados en la integración: hunt/scared/regroup (updateHunter) y found
+// (updateBlackboard). 'danger' y 'missing' son semillas para R2 (aún no se disparan).
 const BARKS = {
   found:   { text: '¡Aquí hay algo!',    prio: 2 },
   danger:  { text: '¡Por ahí no!',        prio: 3 },

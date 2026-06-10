@@ -337,7 +337,10 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     // Objetivo decidido por la IA (coordinador + utilidad). Si la meta es una
     // estación descubierta y estamos encima, trabajamos; si no, caminamos a la meta.
     const cands = buildCandidates(h);
-    h.goal = AIB.chooseGoal(h, cands, BB, alliesOf(h), AIB.AI);
+    const newGoal = AIB.chooseGoal(h, cands, BB, alliesOf(h), AIB.AI);
+    // Si la meta cambia, invalida el waypoint BFS para no seguir 0.35s la ruta vieja.
+    if (!h.goal || !newGoal || newGoal[0] !== h.goal[0] || newGoal[1] !== h.goal[1]) h.next = null;
+    h.goal = newGoal;
     const onObj = nearestIncompleteStation(h.pos.x, h.pos.z);
     if (onObj >= 0 && BB.objectives.has(AIB.cellKey(stations[onObj].gx, stations[onObj].gz))
         && Math.hypot(stations[onObj].wx - h.pos.x, stations[onObj].wz - h.pos.z) < 0.9) {
@@ -529,6 +532,10 @@ function updateBlackboard(dt) {
     const k = AIB.cellKey(s.gx, s.gz);
     if (BB.discovered.has(k) && !BB.objectives.has(k)) {
       BB.objectives.set(k, { gx: s.gx, gz: s.gz, idx: i });
+      // Bark 'found' del agente vivo más cercano al objetivo recién descubierto.
+      let best = null, bd = Infinity;
+      for (const h of hunters) { if (!h.alive) continue; const d = (h.pos.x - s.wx) ** 2 + (h.pos.z - s.wz) ** 2; if (d < bd) { bd = d; best = h; } }
+      if (best) { const b = AIB.barkFor(best, 'found', NOW_SEC, AIB.AI); if (b) { best.lastBarkT = b.t; best.model.showBark(b.text); } }
     }
   });
   AIB.decayDanger(BB, dt);
@@ -552,6 +559,7 @@ function runCoordinator(dt, hunting) {
   // GAME.timeLeft es CUENTA ATRÁS: un evento reciente tiene e.t algo mayor que el
   // tiempo actual, así que "reciente" = (e.t - GAME.timeLeft) pequeño.
   const recentEvents = BB.events.filter((e) => e.t - GAME.timeLeft < 5).length;
+  BB.events = BB.events.filter((e) => e.t - GAME.timeLeft < 30); // poda eventos viejos
   const threat = AIB.computeThreat({ hunting, recentEvents, deaths, avgFear });
   const roles = AIB.assignRoles(hunters.map((h) => ({ id: h.id, alive: h.alive, bravery: h.bravery })), threat);
   for (const h of hunters) if (roles.has(h.id)) h.role = roles.get(h.id);
@@ -586,7 +594,9 @@ function buildCandidates(h) {
       if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 }));
       break;
     case AIB.ROLES.REGROUP:
-      cands = rendezvous ? [{ gx: rendezvous[0], gz: rendezvous[1], bias: 4 }] : [];
+      cands = rendezvous
+        ? [{ gx: rendezvous[0], gz: rendezvous[1], bias: 4 }]
+        : frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 })); // sin punto de reunión: explora
       break;
   }
   // Prioriza por cercanía para no recalcular rutas larguísimas cada vez.
