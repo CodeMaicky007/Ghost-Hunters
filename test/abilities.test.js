@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAbilities, AB, KEY, tickEnergy, canActivate } from '../js/abilities.js';
+import { createAbilities, AB, KEY, tickEnergy, canActivate, activate } from '../js/abilities.js';
 
 test('createAbilities inicializa energía 0 y activos vacíos', () => {
   const ab = createAbilities();
@@ -57,4 +57,26 @@ test('canActivate de visión espectral solo en cacería, sin coste de energía',
   assert.equal(canActivate(ab, KEY.SPECTRAL, { hunting: true }), true);
   ab.cooldowns.spectral = 1;
   assert.equal(canActivate(ab, KEY.SPECTRAL, { hunting: true }), false);
+});
+
+test('activate trampa: gasta energía, fija cooldown y añade trampa', () => {
+  const ab = createAbilities(); ab.energy = 1;
+  assert.equal(activate(ab, KEY.TRAP, [3, 4]), true);
+  assert.ok(Math.abs(ab.energy - (1 - AB.COST_TRAP)) < 1e-9);
+  assert.equal(ab.cooldowns.trap, AB.CD_TRAP);
+  assert.deepEqual(ab.traps, [{ gx: 3, gz: 4, t: AB.TRAP_DUR }]);
+});
+
+test('activate señuelo y visión espectral', () => {
+  const ab = createAbilities(); ab.energy = 1;
+  activate(ab, KEY.DECOY, [5, 6]);
+  assert.deepEqual(ab.decoy, { gx: 5, gz: 6, t: AB.DECOY_DUR });
+  assert.equal(activate(ab, KEY.SPECTRAL, null, { hunting: true }), true);
+  assert.equal(ab.spectral, AB.SPECTRAL_DUR);
+});
+
+test('activate falla si no se puede (devuelve false, sin efecto)', () => {
+  const ab = createAbilities(); // energía 0
+  assert.equal(activate(ab, KEY.TRAP, [1, 1]), false);
+  assert.deepEqual(ab.traps, []);
 });
