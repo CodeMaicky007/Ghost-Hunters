@@ -813,7 +813,7 @@ Reemplaza el `switch (h.role)` de `buildCandidates(h)` por uno que cubra los rol
       }
       break;
     }
-    case RIT.RROLE.CHANNEL:
+    case RIT.RROLE.CHANNELER:
     case RIT.RROLE.GUARD:
       cands = [{ gx: ritual.altar.gx, gz: ritual.altar.gz, bias: 5 }];
       break;

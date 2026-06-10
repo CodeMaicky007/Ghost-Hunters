@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRitual, RCFG, OBJ, PHASE } from '../js/ritual.js';
+import {
+  createRitual, RCFG, OBJ, PHASE, RROLE,
+  pickup, objectCarriedBy, dropCarried,
+  depositCarried, depositedCount, allDeposited,
+  channelTick, discoverableCells, assignRitualRoles,
+} from '../js/ritual.js';
 
 test('createRitual inicializa objetos ON_MAP y fase GATHER', () => {
   const r = createRitual([[2, 3], [5, 6]], [4, 4], { NEED_CHANNELERS: 2, CHANNEL_TIME: 10 });
@@ -24,14 +29,19 @@ test('createRitual usa los defaults RCFG si no se pasan opts', () => {
   assert.equal(r.channelTime, RCFG.CHANNEL_TIME);
 });
 
-import { pickup, objectCarriedBy, dropCarried } from '../js/ritual.js';
-
 test('pickup coge un objeto ON_MAP y lo marca CARRIED', () => {
   const r = createRitual([[2, 3]], [4, 4]);
   assert.equal(pickup(r, 0, 7), true);
   assert.equal(r.objects[0].status, OBJ.CARRIED);
   assert.equal(r.objects[0].carrier, 7);
   assert.equal(pickup(r, 0, 9), false); // ya cargado -> no
+});
+
+test('pickup rechaza coger un segundo objeto si ya llevas uno', () => {
+  const r = createRitual([[1, 1], [2, 2]], [0, 0]);
+  pickup(r, 0, 7);
+  assert.equal(pickup(r, 1, 7), false); // ya cargando -> no
+  assert.equal(r.objects[1].status, OBJ.ON_MAP);
 });
 
 test('objectCarriedBy devuelve el objeto que carga un agente', () => {
@@ -51,8 +61,6 @@ test('dropCarried suelta el objeto en la celda dada', () => {
   assert.equal(dropCarried(r, 7, 1, 1), false); // ya no carga nada
 });
 
-import { depositCarried, depositedCount, allDeposited } from '../js/ritual.js';
-
 test('depositCarried marca DEPOSITED y lo fija al altar', () => {
   const r = createRitual([[2, 3], [5, 6]], [4, 4]);
   pickup(r, 0, 7);
@@ -71,8 +79,6 @@ test('depositar el último objeto pasa a fase CHANNEL', () => {
   assert.equal(allDeposited(r), true);
   assert.equal(r.phase, PHASE.CHANNEL);
 });
-
-import { channelTick } from '../js/ritual.js';
 
 function channeling() {
   const r = createRitual([[1, 1]], [0, 0], { CHANNEL_TIME: 10, NEED_CHANNELERS: 2, CHANNEL_PENALTY: 0.5 });
@@ -108,16 +114,12 @@ test('channelTick no hace nada fuera de fase CHANNEL', () => {
   assert.equal(r.channel, 0);
 });
 
-import { discoverableCells } from '../js/ritual.js';
-
 test('discoverableCells da altar + objetos ON_MAP (no los cargados/depositados)', () => {
   const r = createRitual([[2, 3], [5, 6]], [4, 4]);
   pickup(r, 0, 1); // objeto 0 pasa a CARRIED -> no descubrible como suelto
   const cells = discoverableCells(r).map(([x, z]) => x + ',' + z).sort();
   assert.deepEqual(cells, ['4,4', '5,6']); // altar + objeto 1 ON_MAP
 });
-
-import { assignRitualRoles, RROLE } from '../js/ritual.js';
 
 const mkAgents = (n) => Array.from({ length: n }, (_, i) => ({ id: i, alive: true, bravery: i / (n - 1), gx: i, gz: 0 }));
 
@@ -136,7 +138,17 @@ test('GATHER: 8 vivos -> 4 FETCH + 2 EXPLORE_A + 2 EXPLORE_B; portador forzado a
   assert.equal(roles2.get(7), RROLE.FETCH);
 });
 
-test('CHANNEL: needChannelers como CHANNEL (los más cercanos al altar), resto DEFEND/DISTRACT', () => {
+test('GATHER con escuadra pequeña (n=4): 2 FETCH + 1 EXPLORE_A + 1 EXPLORE_B', () => {
+  const r = createRitual([[1, 1]], [0, 0]);
+  const roles = assignRitualRoles(mkAgents(4), r, 0);
+  const counts = {};
+  for (const v of roles.values()) counts[v] = (counts[v] || 0) + 1;
+  assert.equal(counts[RROLE.FETCH], 2);
+  assert.equal(counts[RROLE.EXPLORE_A], 1);
+  assert.equal(counts[RROLE.EXPLORE_B], 1);
+});
+
+test('CHANNEL: needChannelers como CHANNELER (los más cercanos al altar), resto DEFEND/DISTRACT', () => {
   const r = createRitual([[1, 1], [2, 2]], [0, 0]);
   pickup(r, 0, 1); depositCarried(r, 1); pickup(r, 1, 2); depositCarried(r, 2); // -> CHANNEL
   // agentes a distancias crecientes del altar (gx); needChannelers=2
@@ -144,9 +156,9 @@ test('CHANNEL: needChannelers como CHANNEL (los más cercanos al altar), resto D
   const roles = assignRitualRoles(agents, r, 0);
   const counts = {};
   for (const v of roles.values()) counts[v] = (counts[v] || 0) + 1;
-  assert.equal(counts[RROLE.CHANNEL], 2);
-  assert.equal(roles.get(0), RROLE.CHANNEL); // el más cercano (gx=0)
-  assert.equal(roles.get(1), RROLE.CHANNEL);
+  assert.equal(counts[RROLE.CHANNELER], 2);
+  assert.equal(roles.get(0), RROLE.CHANNELER); // el más cercano (gx=0)
+  assert.equal(roles.get(1), RROLE.CHANNELER);
   assert.ok((counts[RROLE.DEFEND] || 0) + (counts[RROLE.DISTRACT] || 0) === 4);
 });
 

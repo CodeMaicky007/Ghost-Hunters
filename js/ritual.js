@@ -15,7 +15,8 @@ export const RCFG = {
 export const OBJ = { ON_MAP: 'ON_MAP', CARRIED: 'CARRIED', DEPOSITED: 'DEPOSITED' };
 export const PHASE = { GATHER: 'GATHER', CHANNEL: 'CHANNEL', DONE: 'DONE' };
 // Roles de fase: reutiliza los de R1 + añade los específicos del ritual.
-export const RROLE = { ...ROLES, FETCH: 'FETCH', CHANNEL: 'CHANNEL', DEFEND: 'DEFEND', DISTRACT: 'DISTRACT' };
+// (CHANNELER != PHASE.CHANNEL: el rol del canalizador usa otra cadena para no colisionar con la fase.)
+export const RROLE = { ...ROLES, FETCH: 'FETCH', CHANNELER: 'CHANNELER', DEFEND: 'DEFEND', DISTRACT: 'DISTRACT' };
 
 export function createRitual(objectCells, altarCell, opts = {}) {
   const p = { ...RCFG, ...opts };
@@ -36,6 +37,7 @@ export function objectCarriedBy(ritual, agentId) {
 }
 
 export function pickup(ritual, objId, agentId) {
+  if (objectCarriedBy(ritual, agentId)) return false; // ya lleva un objeto
   const o = ritual.objects.find((x) => x.id === objId);
   if (!o || o.status !== OBJ.ON_MAP) return false;
   o.status = OBJ.CARRIED; o.carrier = agentId;
@@ -84,7 +86,7 @@ export function discoverableCells(ritual) {
 
 // Reparte roles según la fase. agents: [{id, alive, bravery, gx, gz}]. threat 0..1.
 // GATHER: 4 FETCH (los más valientes) + EXPLORE_A/B; el portador siempre FETCH.
-// CHANNEL: needChannelers CHANNEL (más cercanos al altar), resto DEFEND, y 1-2
+// CHANNEL: needChannelers CHANNELER (más cercanos al altar), resto DEFEND, y 1-2
 // DISTRACT (los más valientes) salvo amenaza alta.
 export function assignRitualRoles(agents, ritual, threat) {
   const out = new Map();
@@ -94,7 +96,7 @@ export function assignRitualRoles(agents, ritual, threat) {
     const dA = (a) => Math.abs(a.gx - ritual.altar.gx) + Math.abs(a.gz - ritual.altar.gz);
     const byNear = alive.slice().sort((x, y) => dA(x) - dA(y));
     const need = Math.min(ritual.needChannelers, byNear.length);
-    byNear.forEach((a, i) => out.set(a.id, i < need ? RROLE.CHANNEL : RROLE.DEFEND));
+    byNear.forEach((a, i) => out.set(a.id, i < need ? RROLE.CHANNELER : RROLE.DEFEND));
     const rest = byNear.slice(need).sort((x, y) => y.bravery - x.bravery);
     const nDistract = threat >= 1 ? 0 : (rest.length >= 3 ? 2 : (rest.length >= 1 ? 1 : 0));
     for (let i = 0; i < nDistract; i++) out.set(rest[i].id, RROLE.DISTRACT);
