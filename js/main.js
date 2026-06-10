@@ -379,7 +379,17 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     h.working = -1;
     const dest = DISPERSAL && DISPERSAL.get(h.id);
     stepToward(h, dest || farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
-    if (ghostOnFloor0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) { killHunter(h); return; }
+    if (ghostOnFloor0 && stun <= 0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) {
+      if (!h.parryUsed) {
+        h.parryUsed = true; // un parry por cacería: gastado tanto si acierta como si falla
+        if (rollParry(parryChance(h.bravery, h.panic, PARRY))) {
+          stun = STUN_DUR; h.flee = PARRY_FLEE; h.next = null;
+          h.model.play('HitRecieve'); h.model.showBark('¡Bloqueado!'); sfx.parry();
+          return; // parry exitoso: no matas a nadie y quedas aturdido
+        }
+      }
+      killHunter(h); return; // sin parry disponible o falló -> muere
+    }
   } else if (h.flee > 0) {
     h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
   } else if (h.panic) {
