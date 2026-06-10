@@ -298,12 +298,23 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   } else if (h.flee > 0) {
     h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED, dt);
   } else {
-    const si = nearestIncompleteStation(h.pos.x, h.pos.z);
-    if (si < 0) h.working = -1;
-    else { const s = stations[si];
-      if (Math.hypot(s.wx - h.pos.x, s.wz - h.pos.z) < 0.9) { h.working = si; s.progress = Math.min(1, s.progress + dt / MISSION_TIME); if (s.progress >= 1) s.done = true; refreshStation(s); }
-      else { h.working = -1; stepToward(h, [s.gx, s.gz], HUNTER_SPEED, dt); }
+    // Objetivo decidido por la IA (coordinador + utilidad). Si la meta es una
+    // estación descubierta y estamos encima, trabajamos; si no, caminamos a la meta.
+    const cands = buildCandidates(h);
+    h.goal = AIB.chooseGoal(h, cands, BB, alliesOf(h), AIB.AI);
+    const onObj = nearestIncompleteStation(h.pos.x, h.pos.z);
+    if (onObj >= 0 && BB.objectives.has(AIB.cellKey(stations[onObj].gx, stations[onObj].gz))
+        && Math.hypot(stations[onObj].wx - h.pos.x, stations[onObj].wz - h.pos.z) < 0.9) {
+      h.working = onObj;
+      const s = stations[onObj];
+      s.progress = Math.min(1, s.progress + dt / MISSION_TIME);
+      if (s.progress >= 1) s.done = true;
+      refreshStation(s);
+    } else {
+      h.working = -1;
+      if (h.goal) stepToward(h, h.goal, HUNTER_SPEED, dt);
     }
+    pushRecent(h);
   }
   const dx = h.pos.x - prevX, dz = h.pos.z - prevZ;
   const moving = (dx * dx + dz * dz) > 1e-6;
@@ -464,6 +475,75 @@ function updateBlackboard(dt) {
   AIB.decayDanger(BB, dt);
 }
 
+// Centro del mapa en celdas (para dividir alas de exploración).
+const MID_X = () => Math.floor(COLS / 2);
+
+// Corre el coordinador cada COORD_PERIOD s: amenaza -> roles -> rendezvous.
+function runCoordinator(dt, hunting) {
+  coordTimer -= dt;
+  if (coordTimer > 0) return;
+  coordTimer = COORD_PERIOD;
+  const aliveList = hunters.filter((h) => h.alive);
+  const avgFear = aliveList.length ? aliveList.reduce((s, h) => s + h.fear, 0) / aliveList.length : 0;
+  const deaths = hunters.filter((h) => !h.alive).length;
+  const recentEvents = BB.events.filter((e) => GAME.timeLeft - e.t < 5).length;
+  const threat = AIB.computeThreat({ hunting, recentEvents, deaths, avgFear });
+  const roles = AIB.assignRoles(hunters.map((h) => ({ id: h.id, alive: h.alive, bravery: h.bravery })), threat);
+  for (const h of hunters) if (roles.has(h.id)) h.role = roles.get(h.id);
+  // Rendezvous = celda del aliado más valiente (líder), para REGROUP.
+  const leader = aliveList.slice().sort((a, b) => b.bravery - a.bravery)[0];
+  rendezvous = leader ? cellOf(leader.pos.x, leader.pos.z) : null;
+}
+
+// Construye celdas candidatas {gx,gz,bias} según el rol del agente.
+function buildCandidates(h) {
+  const frontier = AIB.computeFrontier(BB, isOpenCell);
+  const objs = [...BB.objectives.values()].filter((o) => !stations[o.idx].done);
+  const midx = MID_X();
+  const near = (cell) => -(Math.abs(cell.gx - cellOf(h.pos.x, h.pos.z)[0]) + Math.abs(cell.gz - cellOf(h.pos.x, h.pos.z)[1]));
+  let cands = [];
+  switch (h.role) {
+    case AIB.ROLES.EXPLORE_A:
+    case AIB.ROLES.EXPLORE_B: {
+      const wantLeft = h.role === AIB.ROLES.EXPLORE_A;
+      cands = frontier
+        .filter(([gx]) => (wantLeft ? gx < midx : gx >= midx))
+        .map(([gx, gz]) => ({ gx, gz, bias: AIB.AI.W_CURIOSITY * h.bravery }));
+      if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: AIB.AI.W_CURIOSITY * h.bravery }));
+      break;
+    }
+    case AIB.ROLES.SCAVENGE:
+      cands = objs.map((o) => ({ gx: o.gx, gz: o.gz, bias: 3 }));
+      if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 }));
+      break;
+    case AIB.ROLES.GUARD:
+      cands = objs.map((o) => ({ gx: o.gx, gz: o.gz, bias: 1.5 }));
+      if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 }));
+      break;
+    case AIB.ROLES.REGROUP:
+      cands = rendezvous ? [{ gx: rendezvous[0], gz: rendezvous[1], bias: 4 }] : [];
+      break;
+  }
+  // Prioriza por cercanía para no recalcular rutas larguísimas cada vez.
+  return cands.sort((a, b) => near(b) - near(a)).slice(0, 12);
+}
+
+// Aliados cercanos (para cohesión), en celdas.
+function alliesOf(h) {
+  return hunters
+    .filter((o) => o.alive && o !== h)
+    .map((o) => { const [gx, gz] = cellOf(o.pos.x, o.pos.z); return { gx, gz }; });
+}
+
+// Guarda las últimas celdas pisadas (ventana corta) para penalizar repetir ruta.
+function pushRecent(h) {
+  const k = AIB.cellKey(...cellOf(h.pos.x, h.pos.z));
+  if (h.recentCells[h.recentCells.length - 1] !== k) {
+    h.recentCells.push(k);
+    if (h.recentCells.length > 8) h.recentCells.shift();
+  }
+}
+
 // ============================================================
 //  Bucle
 // ============================================================
@@ -474,6 +554,7 @@ function update(dt) {
   if (revealTimer > 0) revealTimer = Math.max(0, revealTimer - dt);
   const hunting = updateHunt(dt);
   updateBlackboard(dt);
+  runCoordinator(dt, hunting);
   moveGhost(dt);
   applyAtmosphere();
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
