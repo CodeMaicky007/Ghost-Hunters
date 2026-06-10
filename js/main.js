@@ -427,7 +427,7 @@ function roar() {
   revealedBot = best; revealTimer = REVEAL_DUR;
   for (const h of hunters) {
     if (!h.alive) continue;
-    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= SCARE_RANGE) { h.flee = SCARE_FLEE; h.next = null; if (h.working >= 0 && !stations[h.working].done) { stations[h.working].progress = 0; refreshStation(stations[h.working]); } }
+    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= SCARE_RANGE) { h.flee = SCARE_FLEE; h.next = null; }
   }
 }
 
@@ -546,24 +546,17 @@ function moveGhost(dt) {
 // Predicado de celda abierta para la IA (grid de IA, no el fino de colisión).
 const isOpenCell = (gx, gz) => !isWall(gx, gz);
 
-// Cada frame: los vivos descubren a su alrededor; las estaciones cuya celda ya
-// se descubrió pasan a ser objetivos conocidos; el peligro decae.
 function updateBlackboard(dt) {
   for (const h of hunters) {
     if (!h.alive) continue;
     const [gx, gz] = cellOf(h.pos.x, h.pos.z);
     AIB.discoverAround(BB, gx, gz, VISION_R, isOpenCell);
   }
-  stations.forEach((s, i) => {
-    const k = AIB.cellKey(s.gx, s.gz);
-    if (BB.discovered.has(k) && !BB.objectives.has(k)) {
-      BB.objectives.set(k, { gx: s.gx, gz: s.gz, idx: i });
-      // Bark 'found' del agente vivo más cercano al objetivo recién descubierto.
-      let best = null, bd = Infinity;
-      for (const h of hunters) { if (!h.alive) continue; const d = (h.pos.x - s.wx) ** 2 + (h.pos.z - s.wz) ** 2; if (d < bd) { bd = d; best = h; } }
-      if (best) { const b = AIB.barkFor(best, 'found', NOW_SEC, AIB.AI); if (b) { best.lastBarkT = b.t; best.model.showBark(b.text); } }
-    }
-  });
+  // Objetos sueltos + altar descubiertos -> objetivos conocidos por la IA.
+  for (const [gx, gz] of RIT.discoverableCells(ritual)) {
+    const k = AIB.cellKey(gx, gz);
+    if (BB.discovered.has(k) && !BB.objectives.has(k)) BB.objectives.set(k, { gx, gz });
+  }
   AIB.decayDanger(BB, dt);
 }
 
@@ -676,7 +669,16 @@ function update(dt) {
   moveGhost(dt);
   applyAtmosphere();
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
-  updateStations();
+  // Canalización: cuenta canalizadores en rango del altar; interrumpe si el
+  // fantasma ruge cerca del altar durante la fase.
+  if (ritual.phase === RIT.PHASE.CHANNEL) {
+    const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
+    let nCh = 0;
+    for (const h of hunters) if (h.alive && Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 0.6) nCh++;
+    const ghostNear = Math.hypot(pos.x - ax, pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 1.5 && (hunt.active > 0 || roarCd > ROAR_CD - 0.3);
+    RIT.channelTick(ritual, nCh, dt, { interrupt: ghostNear });
+  }
+  syncRitualMeshes();
   updateHUD(hunting); drawMinimap(); checkEnd();
 }
 let last = performance.now();
