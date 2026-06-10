@@ -5,6 +5,7 @@ import { discoverAround, computeFrontier } from '../js/ai.js';
 import { bumpDanger, addEvent, decayDanger, dangerAt } from '../js/ai.js';
 import { deriveFear, updateFear } from '../js/ai.js';
 import { computeThreat, assignRoles, ROLES } from '../js/ai.js';
+import { scoreCell, chooseGoal } from '../js/ai.js';
 
 const openAll = () => true;
 
@@ -128,4 +129,44 @@ test('assignRoles con amenaza alta pone a todos en REGROUP (solo vivos)', () => 
   const roles = assignRoles(agents, 1);
   assert.equal(roles.get(0), ROLES.REGROUP);
   assert.equal(roles.has(1), false);
+});
+
+const baseAgent = () => ({ fear: 0.2, recentCells: [] });
+
+test('scoreCell penaliza el peligro y escala con el miedo', () => {
+  const bb = createBlackboard();
+  bumpDanger(bb, 5, 5, 2);
+  const ag = baseAgent();
+  const calm = scoreCell({ gx: 5, gz: 5, bias: 0 }, ag, bb, [], AI);
+  ag.fear = 0.9;
+  const scared = scoreCell({ gx: 5, gz: 5, bias: 0 }, ag, bb, [], AI);
+  assert.ok(scared < calm); // más miedo -> evita más el peligro
+});
+
+test('chooseGoal elige la candidata segura frente a la peligrosa', () => {
+  const bb = createBlackboard();
+  bumpDanger(bb, 5, 5, 3);
+  const goal = chooseGoal(baseAgent(), [{ gx: 0, gz: 0, bias: 0 }, { gx: 5, gz: 5, bias: 0 }], bb, [], AI);
+  assert.deepEqual(goal, [0, 0]);
+});
+
+test('chooseGoal evita celdas recién visitadas', () => {
+  const bb = createBlackboard();
+  const ag = baseAgent();
+  ag.recentCells = ['0,0'];
+  const goal = chooseGoal(ag, [{ gx: 0, gz: 0, bias: 0 }, { gx: 9, gz: 9, bias: 0 }], bb, [], AI);
+  assert.deepEqual(goal, [9, 9]);
+});
+
+test('chooseGoal con miedo prefiere acercarse a los aliados', () => {
+  const bb = createBlackboard();
+  const ag = baseAgent();
+  ag.fear = 0.9;
+  const allies = [{ gx: 1, gz: 1 }];
+  const goal = chooseGoal(ag, [{ gx: 2, gz: 2, bias: 0 }, { gx: 9, gz: 9, bias: 0 }], bb, allies, AI);
+  assert.deepEqual(goal, [2, 2]);
+});
+
+test('chooseGoal sin candidatas devuelve null', () => {
+  assert.equal(chooseGoal(baseAgent(), [], createBlackboard(), [], AI), null);
 });
