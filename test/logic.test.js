@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeEnvScale, classifyCell, hunterAnimState, pickAnim, pickDistinct, isSolidCell, collidesBoxGrid } from '../js/logic.js';
+import { parryChance, rollParry } from '../js/logic.js';
 
 test('computeEnvScale fits ceiling to target', () => {
   assert.ok(Math.abs(computeEnvScale(8.6, 2.7) - 0.31395) < 1e-4);
@@ -71,4 +72,27 @@ test('pickDistinct returns n unique items', () => {
   assert.equal(got.length, 3);
   assert.equal(new Set(got).size, 3);
   got.forEach((g) => assert.ok(pool.includes(g)));
+});
+
+test('parryChance: valiente para más que tímido; defaults', () => {
+  const valiente = parryChance(1, false);
+  const timido = parryChance(0.2, false);
+  assert.ok(valiente > timido);
+  assert.ok(Math.abs(valiente - 0.75) < 1e-9); // 0.25 + 0.5*1
+  assert.ok(Math.abs(timido - 0.35) < 1e-9);   // 0.25 + 0.5*0.2
+});
+
+test('parryChance: el pánico la penaliza y se mantiene en 0..1', () => {
+  const calmado = parryChance(1, false);
+  const enPanico = parryChance(1, true);
+  assert.ok(enPanico < calmado);
+  assert.ok(Math.abs(enPanico - 0.75 * 0.3) < 1e-9); // 0.225
+  assert.equal(parryChance(5, false), 1);  // clamp arriba
+  assert.equal(parryChance(-5, false), 0); // clamp abajo
+});
+
+test('rollParry: éxito si rng() < chance', () => {
+  assert.equal(rollParry(0.5, () => 0.4), true);
+  assert.equal(rollParry(0.5, () => 0.6), false);
+  assert.equal(rollParry(0, () => 0), false); // 0 < 0 es false
 });

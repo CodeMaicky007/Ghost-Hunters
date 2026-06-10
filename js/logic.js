@@ -58,6 +58,18 @@ export function collidesBoxGrid(map, cols, rows, cell, x, z, r) {
   return false;
 }
 
+// Probabilidad de parry (0..1) según pericia (valentía). El pánico la hunde.
+export function parryChance(bravery, panic, p = { base: 0.25, perBravery: 0.5, panicMul: 0.3 }) {
+  const c = p.base + p.perBravery * bravery;
+  const v = panic ? c * p.panicMul : c;
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+// Tirada de parry: true si éxito. rng() en [0,1).
+export function rollParry(chance, rng = Math.random) {
+  return rng() < chance;
+}
+
 // Analiza los AABB de las mallas del entorno (en cualquier escala uniforme) y
 // distingue cáscara exterior / suelo / techo / muros, sin depender de three.
 // boxes: [{minX,maxX,minY,maxY,minZ,maxZ}] (en el MISMO espacio/escala).
