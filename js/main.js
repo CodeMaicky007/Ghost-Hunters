@@ -436,7 +436,20 @@ function collidesPlayer(x, z) {
 }
 
 const keys = Object.create(null);
-addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'KeyG' && hunt.active <= 0) startHunt(); if (e.code === 'Digit1' || e.code === 'KeyQ') roar(); if (e.code === 'KeyO') debugAI = !debugAI; });
+addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  if (GAME.state !== 'playing' || document.pointerLockElement !== canvasEl) {
+    if (e.code === 'KeyO') debugAI = !debugAI; // overlay sin pointerlock para depurar
+    return;
+  }
+  if (e.code === 'Digit1' || e.code === 'KeyQ') roar();
+  else if (e.code === 'Digit2') useTeleport();
+  else if (e.code === 'Digit3') useTrap();
+  else if (e.code === 'Digit4') useDecoy();
+  else if (e.code === 'Digit5') useSpectral();
+  else if (e.code === 'Space') tryStartHunt();
+  else if (e.code === 'KeyO') debugAI = !debugAI;
+});
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('mousedown', (e) => { if (e.button === 0) roar(); });
 function roar() {
@@ -686,6 +699,35 @@ function pushRecent(h) {
     if (h.recentCells.length > 8) h.recentCells.shift();
   }
 }
+
+const trapMeshes = [];   // [{gx, gz, mesh}]
+let decoyMesh = null;    // malla del señuelo activo
+function spawnTrapMesh(gx, gz) {
+  const [wx, wz] = worldOf(gx, gz);
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.3, ABL.AB.TRAP_RADIUS * CELL, 24),
+    new THREE.MeshBasicMaterial({ color: 0x9d4edd, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })
+  );
+  ring.rotation.x = -Math.PI / 2; ring.position.set(wx, 0.05, wz);
+  scene.add(ring); trapMeshes.push({ gx, gz, mesh: ring });
+}
+
+function useTeleport() {
+  if (!ABL.canActivate(ab, ABL.KEY.TELEPORT)) return;
+  const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
+  ABL.activate(ab, ABL.KEY.TELEPORT, [gx, gz]);
+  const [wx, wz] = worldOf(gx, gz); pos.x = wx; pos.z = wz;
+}
+function useTrap() {
+  const [gx, gz] = cellOf(pos.x, pos.z);
+  if (ABL.activate(ab, ABL.KEY.TRAP, [gx, gz])) { AIB.addEvent(BB, 'trap', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); spawnTrapMesh(gx, gz); }
+}
+function useDecoy() {
+  const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
+  if (ABL.activate(ab, ABL.KEY.DECOY, [gx, gz])) { AIB.addEvent(BB, 'apparition', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
+}
+function useSpectral() { ABL.activate(ab, ABL.KEY.SPECTRAL, null, { hunting: hunt.active > 0 }); }
+function tryStartHunt() { if (hunt.active <= 0 && ABL.huntReady(ab)) { ABL.spendForHunt(ab); startHunt(); } }
 
 // Celda transitable a la que mira el fantasma: marcha hacia delante (yaw) hasta
 // `maxCells` o hasta toparse con muro; devuelve la última celda abierta.
