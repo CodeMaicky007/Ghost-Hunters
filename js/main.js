@@ -356,6 +356,15 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   h.model.faceDir(dx, dz);
   h.model.setState({ alive: true, hunting, flee: h.flee, working: h.working, moving });
   h.model.setPos(h.pos.x, 0, h.pos.z);
+  // Barks: dispara según estado y respeta cooldown/prioridad.
+  let trig = null;
+  if (hunting) trig = 'hunt';
+  else if (h.panic || h.fear > 0.7) trig = 'scared';
+  else if (h.role === AIB.ROLES.REGROUP) trig = 'regroup';
+  if (trig) {
+    const b = AIB.barkFor(h, trig, performance.now() / 1000, AIB.AI);
+    if (b) { h.lastBarkT = b.t; h.model.showBark(b.text); if (h.fear > 0.5) h.model.glanceBack(); }
+  }
   h.model.update(dt);
 }
 function killHunter(h) { h.alive = false; { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'death', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); } h.model.setSpectral(false); h.model.play('Death'); h.model.update(0); sfx.kill(); checkEnd(); }

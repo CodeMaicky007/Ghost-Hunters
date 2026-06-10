@@ -27,6 +27,9 @@ export class HunterModel {
     this._origMats = [];
     this.root.traverse((o) => { if (o.isMesh) this._origMats.push([o, o.material]); });
     this.play('Idle');
+    this._bubble = null;       // sprite de texto efímero
+    this._bubbleT = 0;         // tiempo restante de la burbuja
+    this._lookBack = 0;        // temporizador de "mirar atrás"
   }
 
   play(clipName, opts = {}) {
@@ -72,6 +75,27 @@ export class HunterModel {
     }
   }
 
-  update(dt) { this.mixer.update(dt); }
+  // Muestra una burbuja de texto sobre la cabeza durante `dur` s.
+  showBark(text, dur = 2.2) {
+    if (this._bubble) { this.root.remove(this._bubble); this._bubble.material.map.dispose?.(); }
+    const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, 0, 256, 64);
+    g.fillStyle = '#fff'; g.font = '22px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, 128, 32);
+    const tex = new THREE.CanvasTexture(c);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    spr.scale.set(1.4, 0.35, 1); spr.position.set(0, 2.1, 0); spr.renderOrder = 1000;
+    this.root.add(spr); this._bubble = spr; this._bubbleT = dur;
+  }
+
+  // Lenguaje corporal: oscilación breve de yaw como "mirar atrás".
+  glanceBack(dur = 0.8) { this._lookBack = dur; }
+
+  update(dt) {
+    if (this._bubbleT > 0) { this._bubbleT -= dt; if (this._bubbleT <= 0 && this._bubble) { this.root.remove(this._bubble); this._bubble = null; } }
+    if (this._lookBack > 0) { this._lookBack -= dt; this.root.rotation.y = this._yaw + Math.sin(this._lookBack * 12) * 0.5; }
+    this.mixer.update(dt);
+  }
   dispose(scene) { scene.remove(this.root); }
 }
