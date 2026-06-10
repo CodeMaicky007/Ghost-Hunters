@@ -19,7 +19,9 @@ base; algunos números (p. ej. **3 investigadores → 8 supervivientes**) y la c
 - **R3 — Kit del fantasma + cacería de 45s + percepción invertida** (Energía Paranormal; habilidades:
   Teletransporte, Trampa, Aparición, Visión espectral; normal = invisible y te sienten por sonido y te
   evitan; cacería = visible, +rápido, parpadeo). Spec: [`superpowers/specs/2026-06-10-kit-fantasma-caceria-design.md`](superpowers/specs/2026-06-10-kit-fantasma-caceria-design.md).
-- **R4 — Sistema de Parry** (uno por cacería, ventana mínima, éxito = aturde 3s, fallo = muerte).
+- **R4 — Sistema de Parry** (uno por cacería; probabilidad por pericia/valentía, penalizada por pánico;
+  éxito = te aturde 3s y sobrevive, fallo = muerte; contrajuego = re-atacar a quien ya paró). Spec:
+  [`superpowers/specs/2026-06-10-parry-design.md`](superpowers/specs/2026-06-10-parry-design.md).
 
 ## Pitch
 Phasmophobia **al revés**, ambientado en los **Backrooms**. Eres **la entidad** (1ª persona).
