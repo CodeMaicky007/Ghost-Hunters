@@ -484,10 +484,10 @@ const VISION_R = AIB.AI.VISION_RADIUS;
 let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
-function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); for (const h of hunters) if (h.alive) h.model.setSpectral(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
+function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); } }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
-  if (escalated) { hunt.active = HUNT_DUR; for (const h of hunters) if (h.alive) h.model.setSpectral(true); return true; }
+  if (escalated) { hunt.active = HUNT_DUR; return true; }
   if (hunt.active > 0) { hunt.active -= dt; if (hunt.active <= 0) endHunt(); }
   else { huntTimer -= dt; if (huntTimer <= 0) { startHunt(); huntTimer = HUNT_EVERY; } }
   return hunt.active > 0;
@@ -815,6 +815,10 @@ function update(dt) {
       if (Math.hypot(h.pos.x - dwx, h.pos.z - dwz) < ABL.AB.SENSE_RANGE) { h.stress = Math.min(1, h.stress + 0.3 * dt); h.next = null; }
     }
   } else if (decoyMesh) { scene.remove(decoyMesh); decoyMesh = null; }
+  // Visión espectral: revela a los supervivientes a través de muros solo mientras
+  // dure la habilidad (que solo se activa en cacería).
+  const seeThrough = ab.spectral > 0;
+  for (const h of hunters) if (h.alive) h.model.setSpectral(seeThrough);
   updateHUD(hunting); drawMinimap(); checkEnd();
 }
 let last = performance.now();
