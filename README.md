@@ -3,7 +3,7 @@
 Mini-juego web de terror asimétrico en **primera persona** para la *Didáctico Jam 2026* (tema: **AL REVÉS**).
 Juegas como **fantasma** con los **controles de movimiento invertidos** y la **vista en negativo**, sobreviviendo a cazadores controlados por IA.
 
-> **Estado:** IA de 8 supervivientes (R1): niebla de descubrimiento, coordinador + utilidad, miedo/pánico recuperable, barks + lenguaje corporal, dispersión en cacería. (Verificado: `node --test` 36/36 + navegador headless sin errores de consola.)
+> **Estado:** R2 — progresión ritual: los 8 supervivientes acarrean objetos rituales al altar y canalizan el ritual final (con defensa) que destruye al fantasma. Timeout → cacería permanente.
 
 ## El tema "AL REVÉS": inversión como evento (no constante)
 

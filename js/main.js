@@ -494,7 +494,11 @@ const el = (id) => document.getElementById(id); const banner = el('glitchBanner'
 function updateHUD(hunting) {
   const m = Math.floor(GAME.timeLeft / 60), s = Math.floor(GAME.timeLeft % 60);
   el('matchTime').textContent = `${m}:${s.toString().padStart(2, '0')}`;
-  el('missions').textContent = `${stations.filter((s) => s.done).length}/${stations.length}`;
+  if (ritual.phase === RIT.PHASE.CHANNEL || ritual.phase === RIT.PHASE.DONE) {
+    el('missions').textContent = 'RITUAL ' + Math.round(ritual.channel * 100) + '%';
+  } else {
+    el('missions').textContent = RIT.depositedCount(ritual) + '/' + ritual.objects.length;
+  }
   el('hunters').textContent = hunters.filter((h) => h.alive).length;
   el('floor').textContent = '🟡 0';
   el('cd1').textContent = roarCd > 0 ? `${roarCd.toFixed(1)}s` : 'LISTO';
@@ -502,6 +506,7 @@ function updateHUD(hunting) {
   el('nextHunt').textContent = hunting ? 'AHORA' : `${Math.max(0, huntTimer).toFixed(0)}s`;
   banner.className = hunting ? 'active' : 'hidden';
   if (hunting) banner.textContent = '⟲ CACERÍA — LUCES FUERA ⟲';
+  if (escalated) { banner.className = 'active'; banner.textContent = '☠ EL VELO SE ROMPIÓ — CACERÍA PERMANENTE ☠'; }
 }
 const mmCanvas = el('minimap'), mmCtx = mmCanvas.getContext('2d'), MM = mmCanvas.width;
 function buildMaze(map, wallColor) {
@@ -515,7 +520,14 @@ function rebuildMinimap() { maze0 = buildMaze(MAP, '#6b5a1f'); }
 function drawMinimap() {
   const cs = MM / COLS;
   mmCtx.clearRect(0, 0, MM, MM); if (maze0) mmCtx.drawImage(maze0, 0, 0);
-  for (const s of stations) { mmCtx.fillStyle = s.done ? '#37d67a' : '#ffae42'; mmCtx.fillRect(s.gx * cs - 1, s.gz * cs - 1, cs + 1.5, cs + 1.5); }
+  const [agx, agz] = [ritual.altar.gx, ritual.altar.gz];
+  mmCtx.fillStyle = '#9d4edd'; mmCtx.fillRect(agx * cs - 2, agz * cs - 2, cs + 3, cs + 3); // altar
+  for (const o of ritual.objects) {
+    if (o.status === RIT.OBJ.DEPOSITED) continue;
+    if (!BB.objectives.has(AIB.cellKey(o.gx, o.gz)) && o.status === RIT.OBJ.ON_MAP) continue; // solo descubiertos
+    mmCtx.fillStyle = o.status === RIT.OBJ.CARRIED ? '#ffd166' : '#d8c089';
+    mmCtx.fillRect(o.gx * cs - 1, o.gz * cs - 1, cs + 1.5, cs + 1.5);
+  }
   if (revealTimer > 0 && revealedBot && revealedBot.alive) { mmCtx.fillStyle = '#ff3b3b'; mmCtx.beginPath(); mmCtx.arc((revealedBot.pos.x / CELL) * cs, (revealedBot.pos.z / CELL) * cs, 4, 0, 7); mmCtx.fill(); }
   mmCtx.fillStyle = '#c77dff'; mmCtx.beginPath(); mmCtx.arc((pos.x / CELL) * cs, (pos.z / CELL) * cs, 3, 0, 7); mmCtx.fill();
   if (debugAI) {
@@ -530,6 +542,8 @@ function drawMinimap() {
     // celdas descubiertas (tenue)
     mmCtx.fillStyle = 'rgba(255,255,255,0.06)';
     for (const k of BB.discovered) { const [gx, gz] = AIB.parseKey(k); mmCtx.fillRect(gx * cs, gz * cs, cs, cs); }
+    mmCtx.fillStyle = '#fff'; mmCtx.font = '9px monospace';
+    mmCtx.fillText(ritual.phase + ' ' + RIT.depositedCount(ritual) + '/' + ritual.objects.length, 2, MM - 3);
   }
 }
 
