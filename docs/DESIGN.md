@@ -2,6 +2,23 @@
 
 > Mini-spec para evitar más pivotes. Versión Backrooms. 8 jun 2026.
 
+## Norte ampliado (9 jun 2026)
+
+El juego evoluciona hacia una visión mayor, adoptada como **norte** e implementada **por fases**
+(cada una con su spec→plan, manteniendo el prototipo jugable). El núcleo de abajo sigue siendo la
+base; algunos números (p. ej. **3 investigadores → 8 supervivientes**) y la condición de victoria
+("apagar monitores" → **ritual final que destruye al fantasma**) se irán superando por fase.
+
+- **R1 — Cerebro IA de los 8 supervivientes.** Escuadrón humano coordinado: niebla de
+  descubrimiento + memoria compartida, coordinador + utilidad por agente, miedo/estrés/cordura con
+  pánico recuperable, barks + lenguaje corporal, reacción a eventos, dispersión en cacería.
+  Spec: [`superpowers/specs/2026-06-09-ia-8-supervivientes-design.md`](superpowers/specs/2026-06-09-ia-8-supervivientes-design.md).
+- **R2 — Progresión de objetivos en capas + ritual final + nueva victoria** (pistas → recursos →
+  objetos rituales → invocación → ritual; el fantasma se destruye = ganan los supervivientes).
+- **R3 — Kit de habilidades del fantasma + cacería de 30s** (Susurro, Distorsión, Aparición,
+  Teletransporte, Trampa Paranormal; cacería: salidas bloqueadas, parpadeo, kill instantáneo).
+- **R4 — Sistema de Parry** (uno por cacería, ventana mínima, éxito = aturde 3s, fallo = muerte).
+
 ## Pitch
 Phasmophobia **al revés**, ambientado en los **Backrooms**. Eres **la entidad** (1ª persona).
 Un grupo de humanos investiga el nivel completando **misiones tipo Among Us**. Tú los
