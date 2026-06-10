@@ -193,6 +193,7 @@ function tone({ type = 'sine', f0, f1, dur, vol = 0.3 }) {
 const sfx = {
   roar() { tone({ type: 'sawtooth', f0: 72, f1: 40, dur: 1.3, vol: 0.55 }); tone({ type: 'square', f0: 98, f1: 52, dur: 1.3, vol: 0.3 }); },
   kill() { tone({ type: 'sine', f0: 170, f1: 38, dur: 0.45, vol: 0.45 }); },
+  parry() { tone({ type: 'square', f0: 880, f1: 440, dur: 0.18, vol: 0.4 }); tone({ type: 'sine', f0: 1320, f1: 660, dur: 0.25, vol: 0.25 }); },
   win() { tone({ type: 'triangle', f0: 440, f1: 880, dur: 0.5, vol: 0.4 }); },
   lose() { tone({ type: 'sawtooth', f0: 300, f1: 70, dur: 0.85, vol: 0.4 }); },
 };
@@ -575,6 +576,7 @@ function updateHUD(hunting) {
   slot(2, 'teleport', ABL.AB.COST_TELEPORT); slot(3, 'trap', ABL.AB.COST_TRAP); slot(4, 'decoy', ABL.AB.COST_DECOY);
   el('cd5').textContent = ab.cooldowns.spectral > 0 ? ab.cooldowns.spectral.toFixed(1) + 's' : (hunting ? 'LISTO' : 'CAZA');
   el('ab5').classList.toggle('dim', !hunting || ab.cooldowns.spectral > 0);
+  el('stunfx').classList.toggle('hidden', stun <= 0);
 }
 const mmCanvas = el('minimap'), mmCtx = mmCanvas.getContext('2d'), MM = mmCanvas.width;
 function buildMaze(map, wallColor) {
