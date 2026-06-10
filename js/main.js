@@ -352,20 +352,25 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     const r = AIB.updateFear(h, fearCtx(h, ghost, hunting), dt);
     h.stress = r.stress; h.sanity = r.sanity; h.fear = r.fear; h.panic = r.panic;
   }
+  // Trampa paranormal: dentro del radio, ralentiza + estrés + reruteo.
+  const [hgx, hgz] = cellOf(h.pos.x, h.pos.z);
+  const trapped = ABL.agentInTrap(ab, hgx, hgz);
+  if (trapped) { h.stress = Math.min(1, h.stress + 0.4 * dt); if (Math.random() < 0.02) h.next = null; }
+  const speedMul = trapped ? 0.5 : 1;
   const prevX = h.pos.x, prevZ = h.pos.z;
   if (hunting) {
     h.working = -1;
     const dest = DISPERSAL && DISPERSAL.get(h.id);
-    stepToward(h, dest || farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED, dt);
+    stepToward(h, dest || farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
     if (ghostOnFloor0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) { killHunter(h); return; }
   } else if (h.flee > 0) {
-    h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED, dt);
+    h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
   } else if (h.panic) {
     // PÁNICO: no progresa objetivos; huye lejos del fantasma de forma errática.
     h.working = -1;
     const away = farthestCell(ghost.x, ghost.z);
     const jitter = [away[0] + (Math.random() < 0.5 ? 1 : -1), away[1] + (Math.random() < 0.5 ? 1 : -1)];
-    stepToward(h, isOpenCell(jitter[0], jitter[1]) ? jitter : away, HUNTER_FLEE_SPEED, dt);
+    stepToward(h, isOpenCell(jitter[0], jitter[1]) ? jitter : away, HUNTER_FLEE_SPEED * speedMul, dt);
     pushRecent(h);
   } else {
     // Objetivo decidido por la IA (coordinador + utilidad). Si carga un objeto y
@@ -390,7 +395,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
         if (Math.hypot(h.pos.x - owx, h.pos.z - owz) <= 0.7) { RIT.pickup(ritual, o.id, h.id); break; }
       }
     }
-    if (h.goal) stepToward(h, h.goal, HUNTER_SPEED, dt);
+    if (h.goal) stepToward(h, h.goal, HUNTER_SPEED * speedMul, dt);
     pushRecent(h);
   }
   const dx = h.pos.x - prevX, dz = h.pos.z - prevZ;
@@ -791,6 +796,11 @@ function update(dt) {
     RIT.channelTick(ritual, nCh, dt, { interrupt: ghostNear });
   }
   syncRitualMeshes();
+  // Quita las mallas de trampas que ya caducaron en el estado puro.
+  for (let i = trapMeshes.length - 1; i >= 0; i--) {
+    const tm = trapMeshes[i];
+    if (!ab.traps.some((t) => t.gx === tm.gx && t.gz === tm.gz)) { scene.remove(tm.mesh); trapMeshes.splice(i, 1); }
+  }
   updateHUD(hunting); drawMinimap(); checkEnd();
 }
 let last = performance.now();
