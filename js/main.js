@@ -547,6 +547,17 @@ function updateHUD(hunting) {
   banner.className = hunting ? 'active' : 'hidden';
   if (hunting) banner.textContent = '⟲ CACERÍA — LUCES FUERA ⟲';
   if (escalated) { banner.className = 'active'; banner.textContent = '☠ EL VELO SE ROMPIÓ — CACERÍA PERMANENTE ☠'; }
+  const eb = el('energyBar'); if (eb) eb.style.width = Math.round(ab.energy * 100) + '%';
+  const ew = el('energyWrap'); if (ew) ew.classList.toggle('ready', ABL.huntReady(ab));
+  el('energyLabel').textContent = ABL.huntReady(ab) ? 'CACERÍA LISTA [ESPACIO]' : 'ENERGÍA';
+  const slot = (id, key, cost) => {
+    const cd = ab.cooldowns[key];
+    el('cd' + id).textContent = cd > 0 ? cd.toFixed(1) + 's' : 'LISTO';
+    el('ab' + id).classList.toggle('dim', cd > 0 || ab.energy < cost);
+  };
+  slot(2, 'teleport', ABL.AB.COST_TELEPORT); slot(3, 'trap', ABL.AB.COST_TRAP); slot(4, 'decoy', ABL.AB.COST_DECOY);
+  el('cd5').textContent = ab.cooldowns.spectral > 0 ? ab.cooldowns.spectral.toFixed(1) + 's' : (hunting ? 'LISTO' : 'CAZA');
+  el('ab5').classList.toggle('dim', !hunting || ab.cooldowns.spectral > 0);
 }
 const mmCanvas = el('minimap'), mmCtx = mmCanvas.getContext('2d'), MM = mmCanvas.width;
 function buildMaze(map, wallColor) {
