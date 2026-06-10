@@ -486,6 +486,7 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('mousedown', (e) => { if (e.button === 0) roar(); });
 function roar() {
+  if (stun > 0) return;
   if (roarCd > 0 || GAME.state !== 'playing' || document.pointerLockElement !== canvasEl) return;
   roarCd = ROAR_CD; sfx.roar();
   { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'roar', gx, gz, GAME.timeLeft); }
@@ -630,7 +631,7 @@ function moveGhost(dt) {
   const move = new THREE.Vector3();
   if (keys['KeyW']) move.add(fwd); if (keys['KeyS']) move.sub(fwd); if (keys['KeyD']) move.add(right); if (keys['KeyA']) move.sub(right);
   if (move.lengthSq() > 0) {
-    move.normalize().multiplyScalar(SPEED * (hunt.active > 0 ? ABL.AB.HUNT_SPEED_MULT : 1) * dt);
+    move.normalize().multiplyScalar(SPEED * (hunt.active > 0 ? ABL.AB.HUNT_SPEED_MULT : 1) * (stun > 0 ? STUN_SLOW : 1) * dt);
     if (!collidesPlayer(pos.x + move.x, pos.z)) pos.x += move.x;
     if (!collidesPlayer(pos.x, pos.z + move.z)) pos.z += move.z;
   }
@@ -760,6 +761,7 @@ function spawnTrapMesh(gx, gz) {
 }
 
 function useTeleport() {
+  if (stun > 0) return;
   if (!ABL.canActivate(ab, ABL.KEY.TELEPORT)) return;
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
   const [cgx, cgz] = cellOf(pos.x, pos.z);
@@ -770,17 +772,19 @@ function useTeleport() {
   tone({ type: 'sine', f0: 600, f1: 120, dur: 0.35, vol: 0.4 });
 }
 function useTrap() {
+  if (stun > 0) return;
   const [gx, gz] = cellOf(pos.x, pos.z);
   if (ABL.activate(ab, ABL.KEY.TRAP, [gx, gz])) { AIB.addEvent(BB, 'trap', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); spawnTrapMesh(gx, gz); }
 }
 function useDecoy() {
+  if (stun > 0) return;
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
   const [cgx, cgz] = cellOf(pos.x, pos.z);
   if (gx === cgx && gz === cgz) return; // sin sitio a la vista donde proyectar el señuelo
   if (ABL.activate(ab, ABL.KEY.DECOY, [gx, gz])) { AIB.addEvent(BB, 'apparition', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); tone({ type: 'triangle', f0: 320, f1: 180, dur: 0.6, vol: 0.35 }); }
 }
-function useSpectral() { ABL.activate(ab, ABL.KEY.SPECTRAL, null, { hunting: hunt.active > 0 }); }
-function tryStartHunt() { if (hunt.active <= 0 && ABL.huntReady(ab)) { ABL.spendForHunt(ab); startHunt(); } }
+function useSpectral() { if (stun > 0) return; ABL.activate(ab, ABL.KEY.SPECTRAL, null, { hunting: hunt.active > 0 }); }
+function tryStartHunt() { if (stun > 0) return; if (hunt.active <= 0 && ABL.huntReady(ab)) { ABL.spendForHunt(ab); startHunt(); } }
 
 // Celda transitable a la que mira el fantasma: marcha hacia delante (yaw) hasta
 // `maxCells` o hasta toparse con muro; devuelve la última celda abierta.
