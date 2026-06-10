@@ -64,3 +64,13 @@ export function depositCarried(ritual, agentId) {
   if (allDeposited(ritual) && ritual.phase === PHASE.GATHER) ritual.phase = PHASE.CHANNEL;
   return true;
 }
+
+// Avanza la canalización en fase CHANNEL. interrupt -> retrocede; si no, sube
+// con >= needChannelers. Devuelve la fase resultante.
+export function channelTick(ritual, nChannelers, dt, { interrupt = false } = {}) {
+  if (ritual.phase !== PHASE.CHANNEL) return ritual.phase;
+  if (interrupt) ritual.channel = Math.max(0, ritual.channel - ritual.penalty * dt);
+  else if (nChannelers >= ritual.needChannelers) ritual.channel = Math.min(1, ritual.channel + dt / ritual.channelTime);
+  if (ritual.channel >= 1) ritual.phase = PHASE.DONE;
+  return ritual.phase;
+}

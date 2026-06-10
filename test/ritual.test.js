@@ -71,3 +71,39 @@ test('depositar el último objeto pasa a fase CHANNEL', () => {
   assert.equal(allDeposited(r), true);
   assert.equal(r.phase, PHASE.CHANNEL);
 });
+
+import { channelTick } from '../js/ritual.js';
+
+function channeling() {
+  const r = createRitual([[1, 1]], [0, 0], { CHANNEL_TIME: 10, NEED_CHANNELERS: 2, CHANNEL_PENALTY: 0.5 });
+  pickup(r, 0, 1); depositCarried(r, 1); // fuerza CHANNEL
+  return r;
+}
+
+test('channelTick sube con >= needChannelers, no sube con menos', () => {
+  const r = channeling();
+  channelTick(r, 2, 1);             // +1/10
+  assert.ok(Math.abs(r.channel - 0.1) < 1e-9);
+  channelTick(r, 1, 1);             // pocos -> sin cambio
+  assert.ok(Math.abs(r.channel - 0.1) < 1e-9);
+});
+
+test('channelTick retrocede con interrupt y nunca baja de 0', () => {
+  const r = channeling();
+  channelTick(r, 2, 1); // 0.1
+  channelTick(r, 2, 1, { interrupt: true }); // -0.5 -> clamp 0
+  assert.equal(r.channel, 0);
+});
+
+test('channelTick llega a DONE al 100%', () => {
+  const r = channeling();
+  for (let i = 0; i < 12; i++) channelTick(r, 2, 1); // 12s > 10s
+  assert.equal(r.channel, 1);
+  assert.equal(r.phase, PHASE.DONE);
+});
+
+test('channelTick no hace nada fuera de fase CHANNEL', () => {
+  const r = createRitual([[1, 1]], [0, 0]); // GATHER
+  assert.equal(channelTick(r, 5, 1), PHASE.GATHER);
+  assert.equal(r.channel, 0);
+});
