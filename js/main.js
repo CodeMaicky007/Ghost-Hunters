@@ -11,6 +11,7 @@ import { placeEnv } from './env.js';
 import { bakeGrid } from './grid.js';
 import { collidesBoxGrid } from './logic.js';
 import { HunterModel } from './hunters.js';
+import * as AIB from './ai.js';
 
 // ---------- Config / balance ----------
 // CELL=0.75: el horneado rasteriza la huella de los tabiques (finos, ~1u) al
@@ -30,7 +31,7 @@ const MAX_PITCH = Math.PI / 2 - 0.05;
 
 const GRID = 26;
 const MATCH_TIME = 180;
-const NUM_HUNTERS = 3;
+const NUM_HUNTERS = 8;
 const NUM_STATIONS = 4;
 const MISSION_TIME = 18;
 const HUNTER_SPEED = 2.8;
@@ -250,6 +251,8 @@ function makeBoxHunter(color) {
     setState() {},
     setSpectral(on) { body.material.emissive = new THREE.Color(on ? 0x66ccff : 0x000000); body.material.depthTest = !on; body.renderOrder = on ? 999 : 0; },
     play() {},
+    showBark() {},
+    glanceBack() {},
     update() {},
   };
 }
@@ -262,7 +265,14 @@ function makeHunters(chars) {
     const gltf = chars && chars[i % chars.length] && chars[i % chars.length].gltf;
     const model = gltf ? new HunterModel(gltf) : makeBoxHunter(fallbackColors[i % fallbackColors.length]);
     model.setPos(wx, 0, wz); scene.add(model.root);
-    hunters.push({ pos: new THREE.Vector3(wx, 0, wz), model, alive: true, flee: 0, repath: 0, next: null, working: -1 });
+    hunters.push({
+      id: i, pos: new THREE.Vector3(wx, 0, wz), model, alive: true,
+      flee: 0, repath: 0, next: null, working: -1,
+      // --- estado IA ---
+      bravery: 0.2 + Math.random() * 0.7,   // personalidad fija
+      stress: 0, sanity: 1, fear: 0, panic: false,
+      role: AIB.ROLES.EXPLORE_A, recentCells: [], lastBarkT: -999, goal: null,
+    });
   }
 }
 function farthestCell(x, z) { let best = null, bd = -1; for (const [gx, gz] of REACH.list) { const [wx, wz] = worldOf(gx, gz); const d = (wx - x) ** 2 + (wz - z) ** 2; if (d > bd) { bd = d; best = [gx, gz]; } } return best; }
@@ -338,6 +348,13 @@ function roar() {
 //  Cacería + partida
 // ============================================================
 const hunt = { active: 0 }; let huntTimer = HUNT_EVERY;
+// Pizarra compartida del escuadrón (niebla, objetivos, peligro, eventos, roster).
+let BB = AIB.createBlackboard();
+const VISION_R = AIB.AI.VISION_RADIUS;
+let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
+const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
+let rendezvous = null;        // celda de reunión para REGROUP
+let DISPERSAL = null;
 function startHunt() { hunt.active = HUNT_DUR; sfx.roar(); duckMusic(true); for (const h of hunters) if (h.alive) h.model.setSpectral(true); }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
@@ -469,6 +486,7 @@ async function boot() {
   }
   const [ox, oz] = firstOpenCell();
   REACH = floodReachable(ox, oz);
+  BB = AIB.createBlackboard();
   console.log('REACH celdas transitables:', REACH.list.length);
   const [sx, sz] = clearSpawnCell();
   pos.set(sx * CELL, EYE, sz * CELL);
