@@ -287,9 +287,37 @@ function stepToward(ent, goal, speed, dt) {
   if (!collides(ent.pos.x + vx, ent.pos.z, HUNTER_R)) ent.pos.x += vx;
   if (!collides(ent.pos.x, ent.pos.z + vz, HUNTER_R)) ent.pos.z += vz;
 }
+const GHOST_FEAR_RANGE = 5;   // distancia a la que el fantasma estresa
+const GROUP_RADIUS = 3;       // unidades de mundo para considerarse "agrupado"
+
+// Construye el ctx de miedo de un agente a partir del estado del mundo.
+function fearCtx(h, ghost, hunting) {
+  const dGhost = Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z);
+  let near = 0;
+  for (const o of hunters) {
+    if (o === h || !o.alive) continue;
+    if (Math.hypot(o.pos.x - h.pos.x, o.pos.z - h.pos.z) < GROUP_RADIUS) near++;
+  }
+  const grouped = near >= 1;
+  const [gx, gz] = cellOf(h.pos.x, h.pos.z);
+  const safe = !hunting && AIB.dangerAt(BB, gx, gz) < 0.3 && dGhost > GHOST_FEAR_RANGE;
+  return {
+    nearGhost: dGhost < GHOST_FEAR_RANGE,
+    inEvent: AIB.dangerAt(BB, gx, gz) > 0.5,
+    dark: hunting,
+    alone: !grouped,
+    grouped,
+    safe,
+  };
+}
+
 function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   if (!h.alive) { h.model.update(dt); return; }
   if (h.flee > 0) h.flee -= dt;
+  {
+    const r = AIB.updateFear(h, fearCtx(h, ghost, hunting), dt);
+    h.stress = r.stress; h.sanity = r.sanity; h.fear = r.fear; h.panic = r.panic;
+  }
   const prevX = h.pos.x, prevZ = h.pos.z;
   if (hunting) {
     h.working = -1;
@@ -297,6 +325,13 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     if (ghostOnFloor0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) { killHunter(h); return; }
   } else if (h.flee > 0) {
     h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED, dt);
+  } else if (h.panic) {
+    // PÁNICO: no progresa objetivos; huye lejos del fantasma de forma errática.
+    h.working = -1;
+    const away = farthestCell(ghost.x, ghost.z);
+    const jitter = [away[0] + (Math.random() < 0.5 ? 1 : -1), away[1] + (Math.random() < 0.5 ? 1 : -1)];
+    stepToward(h, isOpenCell(jitter[0], jitter[1]) ? jitter : away, HUNTER_FLEE_SPEED, dt);
+    pushRecent(h);
   } else {
     // Objetivo decidido por la IA (coordinador + utilidad). Si la meta es una
     // estación descubierta y estamos encima, trabajamos; si no, caminamos a la meta.
