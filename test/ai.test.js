@@ -4,6 +4,7 @@ import { cellKey, parseKey, createBlackboard } from '../js/ai.js';
 import { discoverAround, computeFrontier } from '../js/ai.js';
 import { bumpDanger, addEvent, decayDanger, dangerAt } from '../js/ai.js';
 import { deriveFear, updateFear } from '../js/ai.js';
+import { computeThreat, assignRoles, ROLES } from '../js/ai.js';
 
 const openAll = () => true;
 
@@ -101,4 +102,30 @@ test('updateFear acumula estrés cerca del fantasma y lo calma agrupado+seguro',
   const ag2 = { stress: 0.5, sanity: 1, bravery: 0, panic: false };
   const down = updateFear(ag2, { grouped: true, safe: true }, 1);
   assert.ok(down.stress < 0.5);
+});
+
+test('computeThreat: cacería dispara reagrupamiento, calma no', () => {
+  assert.ok(computeThreat({ hunting: true, recentEvents: 0, deaths: 0, avgFear: 0 }) >= AI.THREAT_REGROUP);
+  assert.ok(computeThreat({ hunting: false, recentEvents: 0, deaths: 0, avgFear: 0.1 }) < AI.THREAT_REGROUP);
+});
+
+test('assignRoles reparte 8 vivos en 2+2+2+2 por quartiles de valentía', () => {
+  const agents = Array.from({ length: 8 }, (_, i) => ({ id: i, alive: true, bravery: i / 7 }));
+  const roles = assignRoles(agents, 0);
+  const counts = {};
+  for (const r of roles.values()) counts[r] = (counts[r] || 0) + 1;
+  assert.equal(counts[ROLES.EXPLORE_A], 2);
+  assert.equal(counts[ROLES.EXPLORE_B], 2);
+  assert.equal(counts[ROLES.GUARD], 2);
+  assert.equal(counts[ROLES.SCAVENGE], 2);
+  // El más valiente explora; el más miedoso recolecta.
+  assert.equal(roles.get(7), ROLES.EXPLORE_A);
+  assert.equal(roles.get(0), ROLES.SCAVENGE);
+});
+
+test('assignRoles con amenaza alta pone a todos en REGROUP (solo vivos)', () => {
+  const agents = [{ id: 0, alive: true, bravery: 0.5 }, { id: 1, alive: false, bravery: 0.5 }];
+  const roles = assignRoles(agents, 1);
+  assert.equal(roles.get(0), ROLES.REGROUP);
+  assert.equal(roles.has(1), false);
 });
