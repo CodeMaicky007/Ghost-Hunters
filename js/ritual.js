@@ -30,3 +30,21 @@ export function createRitual(objectCells, altarCell, opts = {}) {
     penalty: p.CHANNEL_PENALTY,
   };
 }
+
+export function objectCarriedBy(ritual, agentId) {
+  return ritual.objects.find((o) => o.status === OBJ.CARRIED && o.carrier === agentId) || null;
+}
+
+export function pickup(ritual, objId, agentId) {
+  const o = ritual.objects.find((x) => x.id === objId);
+  if (!o || o.status !== OBJ.ON_MAP) return false;
+  o.status = OBJ.CARRIED; o.carrier = agentId;
+  return true;
+}
+
+export function dropCarried(ritual, agentId, gx, gz) {
+  const o = objectCarriedBy(ritual, agentId);
+  if (!o) return false;
+  o.status = OBJ.ON_MAP; o.carrier = null; o.gx = gx; o.gz = gz;
+  return true;
+}
