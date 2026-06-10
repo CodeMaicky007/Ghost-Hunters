@@ -376,6 +376,7 @@ function killHunter(h) { h.alive = false; { const [gx, gz] = cellOf(h.pos.x, h.p
 const pos = new THREE.Vector3(CELL, EYE, CELL);
 let yaw = 0, pitch = 0, currentFloor = 0;
 let roarCd = 0, revealTimer = 0, revealedBot = null;
+let debugAI = false;   // overlay de depuración de la IA (tecla O)
 
 function groundHeight() { return 0; }
 // Colisión del jugador contra el grid FINO: recorre toda la huella del jugador
@@ -385,7 +386,7 @@ function collidesPlayer(x, z) {
 }
 
 const keys = Object.create(null);
-addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'KeyG' && hunt.active <= 0) startHunt(); if (e.code === 'Digit1' || e.code === 'KeyQ') roar(); });
+addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'KeyG' && hunt.active <= 0) startHunt(); if (e.code === 'Digit1' || e.code === 'KeyQ') roar(); if (e.code === 'KeyO') debugAI = !debugAI; });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('mousedown', (e) => { if (e.button === 0) roar(); });
 function roar() {
@@ -472,6 +473,20 @@ function drawMinimap() {
   for (const s of stations) { mmCtx.fillStyle = s.done ? '#37d67a' : '#ffae42'; mmCtx.fillRect(s.gx * cs - 1, s.gz * cs - 1, cs + 1.5, cs + 1.5); }
   if (revealTimer > 0 && revealedBot && revealedBot.alive) { mmCtx.fillStyle = '#ff3b3b'; mmCtx.beginPath(); mmCtx.arc((revealedBot.pos.x / CELL) * cs, (revealedBot.pos.z / CELL) * cs, 4, 0, 7); mmCtx.fill(); }
   mmCtx.fillStyle = '#c77dff'; mmCtx.beginPath(); mmCtx.arc((pos.x / CELL) * cs, (pos.z / CELL) * cs, 3, 0, 7); mmCtx.fill();
+  if (debugAI) {
+    const cs = MM / COLS;
+    const COLR = { EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', GUARD: '#ffae42', SCAVENGE: '#c77dff', REGROUP: '#ff3b3b' };
+    for (const h of hunters) {
+      if (!h.alive) continue;
+      mmCtx.fillStyle = COLR[h.role] || '#fff';
+      mmCtx.fillRect((h.pos.x / CELL) * cs - 2, (h.pos.z / CELL) * cs - 2, 4, 4);
+      mmCtx.fillStyle = h.panic ? '#ff0000' : '#000';
+      mmCtx.fillRect((h.pos.x / CELL) * cs - 2, (h.pos.z / CELL) * cs - 4, 4 * Math.min(1, h.stress), 1.5);
+    }
+    // celdas descubiertas (tenue)
+    mmCtx.fillStyle = 'rgba(255,255,255,0.06)';
+    for (const k of BB.discovered) { const [gx, gz] = AIB.parseKey(k); mmCtx.fillRect(gx * cs, gz * cs, cs, cs); }
+  }
 }
 
 // ============================================================
