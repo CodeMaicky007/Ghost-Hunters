@@ -321,7 +321,8 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   const prevX = h.pos.x, prevZ = h.pos.z;
   if (hunting) {
     h.working = -1;
-    stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED, dt);
+    const dest = DISPERSAL && DISPERSAL.get(h.id);
+    stepToward(h, dest || farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED, dt);
     if (ghostOnFloor0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) { killHunter(h); return; }
   } else if (h.flee > 0) {
     h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED, dt);
@@ -599,6 +600,17 @@ function update(dt) {
   const hunting = updateHunt(dt);
   updateBlackboard(dt);
   runCoordinator(dt, hunting);
+  // En cacería, reparte celdas de escape distintas (lejos del fantasma).
+  if (hunting) {
+    const aliveAgents = hunters.filter((h) => h.alive).map((h) => { const [gx, gz] = cellOf(h.pos.x, h.pos.z); return { id: h.id, gx, gz }; });
+    const [ggx, ggz] = cellOf(pos.x, pos.z);
+    const safe = REACH.list
+      .filter(([gx, gz]) => (Math.abs(gx - ggx) + Math.abs(gz - ggz)) > 6)
+      .map(([gx, gz]) => ({ gx, gz }));
+    DISPERSAL = AIB.dispersalTargets(aliveAgents, { gx: ggx, gz: ggz }, safe, AIB.AI);
+  } else {
+    DISPERSAL = null;
+  }
   moveGhost(dt);
   applyAtmosphere();
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
