@@ -170,7 +170,15 @@ function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width 
 //  Audio (sintetizado) + música opcional en bucle
 // ============================================================
 let actx = null, master = null, musicEl = null;
-function initAudio() { if (actx) return; actx = new (window.AudioContext || window.webkitAudioContext)(); master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination); }
+let senseOsc = null, senseGain = null;
+function initAudio() {
+  if (actx) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination);
+  senseOsc = actx.createOscillator(); senseGain = actx.createGain();
+  senseOsc.type = 'sine'; senseOsc.frequency.value = 54; senseGain.gain.value = 0.0001;
+  senseOsc.connect(senseGain); senseGain.connect(master); senseOsc.start();
+}
 function startMusic() { if (musicEl) return; musicEl = new Audio('assets/music/track.mp3'); musicEl.loop = true; musicEl.volume = 0.5; musicEl.play().catch(() => {}); }
 function duckMusic(down) { if (musicEl) musicEl.volume = down ? 0.12 : 0.5; }
 function tone({ type = 'sine', f0, f1, dur, vol = 0.3 }) {
@@ -322,6 +330,7 @@ function stepToward(ent, goal, speed, dt) {
   if (!collides(ent.pos.x, ent.pos.z + vz, HUNTER_R)) ent.pos.z += vz;
 }
 const GHOST_FEAR_RANGE = 5;   // distancia a la que el fantasma estresa
+const SENSE_RANGE_W = ABL.AB.SENSE_RANGE;
 const GROUP_RADIUS = 3;       // unidades de mundo para considerarse "agrupado"
 
 // Construye el ctx de miedo de un agente a partir del estado del mundo.
@@ -357,6 +366,11 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   const trapped = ABL.agentInTrap(ab, hgx, hgz);
   if (trapped) { h.stress = Math.min(1, h.stress + 0.4 * dt); if (Math.random() < 0.02) h.next = null; }
   const speedMul = trapped ? 0.5 : 1;
+  // Sentido del fantasma (invisible): cuanto más cerca, más se alejan. Nunca van hacia él.
+  if (!hunting) {
+    const dG = Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z);
+    if (dG < SENSE_RANGE_W) { const prox = 1 - dG / SENSE_RANGE_W; h.flee = Math.max(h.flee, 0.3 + prox * 1.2); h.next = null; }
+  }
   const prevX = h.pos.x, prevZ = h.pos.z;
   if (hunting) {
     h.working = -1;
@@ -597,6 +611,7 @@ function moveGhost(dt) {
   currentFloor = 0;
   pos.y = h + EYE; camera.position.copy(pos); camera.rotation.set(pitch, yaw, 0);
   aura.position.set(pos.x, h + EYE, pos.z);
+  aura.intensity = hunt.active > 0 ? 1.2 : 0.12; // invisible (tenue) en normal, visible en cacería
 }
 
 // Predicado de celda abierta para la IA (grid de IA, no el fino de colisión).
@@ -765,6 +780,12 @@ function update(dt) {
   let nearSurvivor = false;
   for (const h of hunters) { if (h.alive && Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) < ABL.AB.SENSE_RANGE) { nearSurvivor = true; break; } }
   ABL.tickEnergy(ab, dt, { nearSurvivor });
+  if (senseGain) {
+    let dmin = Infinity;
+    for (const h of hunters) if (h.alive) dmin = Math.min(dmin, Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z));
+    const prox = hunting ? 0 : Math.max(0, 1 - dmin / ABL.AB.SENSE_RANGE); // 0..1, silenciado en cacería
+    senseGain.gain.setTargetAtTime(0.0001 + prox * 0.25, actx.currentTime, 0.1);
+  }
   updateBlackboard(dt);
   runCoordinator(dt, hunting);
   FRONTIER = AIB.computeFrontier(BB, isOpenCell);   // 1× por frame (lo leen los 8 agentes)
