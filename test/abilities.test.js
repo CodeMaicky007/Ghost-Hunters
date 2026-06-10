@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAbilities, AB, KEY, tickEnergy, canActivate, activate } from '../js/abilities.js';
+import { createAbilities, AB, KEY, tickEnergy, canActivate, activate, agentInTrap, huntReady, spendForHunt } from '../js/abilities.js';
 
 test('createAbilities inicializa energía 0 y activos vacíos', () => {
   const ab = createAbilities();
@@ -79,4 +79,21 @@ test('activate falla si no se puede (devuelve false, sin efecto)', () => {
   const ab = createAbilities(); // energía 0
   assert.equal(activate(ab, KEY.TRAP, [1, 1]), false);
   assert.deepEqual(ab.traps, []);
+});
+
+test('agentInTrap detecta celdas dentro del radio (Manhattan)', () => {
+  const ab = createAbilities();
+  ab.traps = [{ gx: 5, gz: 5, t: 10 }];
+  assert.equal(agentInTrap(ab, 5, 5), true);
+  assert.equal(agentInTrap(ab, 7, 5), true);  // dist 2 == radio
+  assert.equal(agentInTrap(ab, 8, 5), false); // dist 3 > radio
+});
+
+test('huntReady y spendForHunt', () => {
+  const ab = createAbilities();
+  assert.equal(huntReady(ab), false);
+  ab.energy = 1;
+  assert.equal(huntReady(ab), true);
+  spendForHunt(ab);
+  assert.equal(ab.energy, 0);
 });
