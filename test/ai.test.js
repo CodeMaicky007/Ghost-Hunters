@@ -6,6 +6,7 @@ import { bumpDanger, addEvent, decayDanger, dangerAt } from '../js/ai.js';
 import { deriveFear, updateFear } from '../js/ai.js';
 import { computeThreat, assignRoles, ROLES } from '../js/ai.js';
 import { scoreCell, chooseGoal } from '../js/ai.js';
+import { dispersalTargets } from '../js/ai.js';
 
 const openAll = () => true;
 
@@ -169,4 +170,22 @@ test('chooseGoal con miedo prefiere acercarse a los aliados', () => {
 
 test('chooseGoal sin candidatas devuelve null', () => {
   assert.equal(chooseGoal(baseAgent(), [], createBlackboard(), [], AI), null);
+});
+
+test('dispersalTargets asigna celdas distintas y lejos del fantasma', () => {
+  const agents = [{ id: 0, gx: 1, gz: 1 }, { id: 1, gx: 2, gz: 1 }, { id: 2, gx: 1, gz: 2 }];
+  const ghost = { gx: 0, gz: 0 };
+  const safe = [{ gx: 9, gz: 9 }, { gx: 8, gz: 1 }, { gx: 1, gz: 8 }, { gx: 0, gz: 1 }];
+  const out = dispersalTargets(agents, ghost, safe, AI);
+  assert.equal(out.size, 3);
+  const cells = [...out.values()].map((c) => c.join(','));
+  assert.equal(new Set(cells).size, 3); // todas distintas
+  // ninguna es la celda pegada al fantasma (0,1) si hay alternativas
+  assert.ok(!cells.includes('0,1'));
+});
+
+test('dispersalTargets no asigna más agentes que celdas seguras', () => {
+  const agents = [{ id: 0, gx: 0, gz: 0 }, { id: 1, gx: 0, gz: 0 }];
+  const out = dispersalTargets(agents, { gx: 5, gz: 5 }, [{ gx: 1, gz: 1 }], AI);
+  assert.equal(out.size, 1);
 });
