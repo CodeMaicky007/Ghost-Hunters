@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cellKey, parseKey, createBlackboard } from '../js/ai.js';
 import { discoverAround, computeFrontier } from '../js/ai.js';
+import { bumpDanger, addEvent, decayDanger, dangerAt } from '../js/ai.js';
 
 const openAll = () => true;
 
@@ -43,4 +44,31 @@ test('computeFrontier devuelve vecinas abiertas no descubiertas', () => {
   const front = computeFrontier(bb, openAll);
   const keys = front.map(([x, z]) => x + ',' + z).sort();
   assert.deepEqual(keys, ['1,2', '2,1', '2,3', '3,2']);
+});
+
+import { AI } from '../js/ai.js';
+
+test('bumpDanger acumula y dangerAt lee', () => {
+  const bb = createBlackboard();
+  bumpDanger(bb, 1, 1, 2);
+  bumpDanger(bb, 1, 1, 1);
+  assert.equal(dangerAt(bb, 1, 1), 3);
+  assert.equal(dangerAt(bb, 9, 9), 0);
+});
+
+test('addEvent encola y sube el peligro de la celda', () => {
+  const bb = createBlackboard();
+  addEvent(bb, 'roar', 4, 5, 12.3);
+  assert.equal(bb.events.length, 1);
+  assert.deepEqual(bb.events[0], { type: 'roar', gx: 4, gz: 5, t: 12.3 });
+  assert.equal(dangerAt(bb, 4, 5), AI.EVENT_DANGER);
+});
+
+test('decayDanger reduce con el tiempo y borra lo despreciable', () => {
+  const bb = createBlackboard();
+  bumpDanger(bb, 0, 0, 1);
+  decayDanger(bb, 1, 0.5, 0.05); // *0.5 en 1s -> 0.5
+  assert.ok(Math.abs(dangerAt(bb, 0, 0) - 0.5) < 1e-9);
+  decayDanger(bb, 5, 0.5, 0.05); // *0.5^5 -> ~0.0156 < min -> borrado
+  assert.equal(bb.danger.has('0,0'), false);
 });
