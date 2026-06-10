@@ -3,7 +3,7 @@
 Mini-juego web de terror asimétrico en **primera persona** para la *Didáctico Jam 2026* (tema: **AL REVÉS**).
 Juegas como **fantasma** con los **controles de movimiento invertidos** y la **vista en negativo**, sobreviviendo a cazadores controlados por IA.
 
-> **Estado:** R2 — progresión ritual: los 8 supervivientes acarrean objetos rituales al altar y canalizan el ritual final (con defensa) que destruye al fantasma. Timeout → cacería permanente.
+> **Estado:** R3 — kit del fantasma + cacería de 45s + percepción invertida: invisible y te sienten por sonido en normal (te evitan); visible y +rápido en cacería; Energía Paranormal, Teletransporte/Trampa/Aparición/Visión espectral.
 
 ## El tema "AL REVÉS": inversión como evento (no constante)
 
@@ -31,12 +31,15 @@ Luego abre <http://localhost:8080> y haz click en **JUGAR**.
 
 | Tecla | Acción |
 |---|---|
-| Ratón | Mirar (normal — NUNCA se invierte) |
-| W A S D | Mover — clásico, **salvo durante un glitch** (entonces va al revés) |
-| `G` | Forzar una **cacería** (para probar el feel) |
-| `N` | Alternar vista negativa total (experimento — deja la escena en blanco) |
-| `O` | Overlay de depuración de la IA (roles/estrés/celdas descubiertas) |
-| `Esc` | Soltar el ratón |
+| Ratón | Mirar |
+| W A S D | Mover |
+| `1` / clic | Rugido (susto; revela al más lejano) |
+| `2` | Teletransporte (a donde miras) |
+| `3` | Trampa paranormal (en tu celda) |
+| `4` | Aparición (señuelo donde miras) |
+| `5` | Visión espectral (solo en cacería) |
+| `Espacio` | Cacería (si la barra de energía está llena) |
+| `O` | Overlay de depuración de la IA |
 
 ## Tecnología
 
