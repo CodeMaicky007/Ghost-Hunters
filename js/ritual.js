@@ -74,3 +74,10 @@ export function channelTick(ritual, nChannelers, dt, { interrupt = false } = {})
   if (ritual.channel >= 1) ritual.phase = PHASE.DONE;
   return ritual.phase;
 }
+
+// Celdas que la niebla puede descubrir: el altar y los objetos sueltos (ON_MAP).
+export function discoverableCells(ritual) {
+  const cells = [[ritual.altar.gx, ritual.altar.gz]];
+  for (const o of ritual.objects) if (o.status === OBJ.ON_MAP) cells.push([o.gx, o.gz]);
+  return cells;
+}

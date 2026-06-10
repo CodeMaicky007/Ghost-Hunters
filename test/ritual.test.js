@@ -107,3 +107,12 @@ test('channelTick no hace nada fuera de fase CHANNEL', () => {
   assert.equal(channelTick(r, 5, 1), PHASE.GATHER);
   assert.equal(r.channel, 0);
 });
+
+import { discoverableCells } from '../js/ritual.js';
+
+test('discoverableCells da altar + objetos ON_MAP (no los cargados/depositados)', () => {
+  const r = createRitual([[2, 3], [5, 6]], [4, 4]);
+  pickup(r, 0, 1); // objeto 0 pasa a CARRIED -> no descubrible como suelto
+  const cells = discoverableCells(r).map(([x, z]) => x + ',' + z).sort();
+  assert.deepEqual(cells, ['4,4', '5,6']); // altar + objeto 1 ON_MAP
+});
