@@ -75,6 +75,22 @@ test('activate señuelo y visión espectral', () => {
   assert.equal(ab.spectral, AB.SPECTRAL_DUR);
 });
 
+test('activate teletransporte: gasta + cooldown; rechaza destino nulo', () => {
+  const ab = createAbilities(); ab.energy = 1;
+  assert.equal(activate(ab, KEY.TELEPORT, null), false); // sin destino -> no gasta
+  assert.equal(ab.energy, 1);
+  assert.equal(ab.cooldowns.teleport, 0);
+  assert.equal(activate(ab, KEY.TELEPORT, [2, 3]), true);
+  assert.ok(Math.abs(ab.energy - (1 - AB.COST_TELEPORT)) < 1e-9);
+  assert.equal(ab.cooldowns.teleport, AB.CD_TELEPORT);
+});
+
+test('agentInTrap ignora trampas caducadas (t<=0)', () => {
+  const ab = createAbilities();
+  ab.traps = [{ gx: 5, gz: 5, t: 0 }];
+  assert.equal(agentInTrap(ab, 5, 5), false);
+});
+
 test('activate falla si no se puede (devuelve false, sin efecto)', () => {
   const ab = createAbilities(); // energía 0
   assert.equal(activate(ab, KEY.TRAP, [1, 1]), false);
