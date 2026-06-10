@@ -23,17 +23,27 @@ export function loadGLB(url) {
 // Carga el entorno + n personajes distintos. onProgress(fraction 0..1).
 export async function loadAllAssets(n, onProgress = () => {}) {
   const chosen = pickDistinct(CHARACTER_FILES, n);
+  // Props opcionales (tv/altar/cross): si su GLB falla (p. ej. usa una extensión
+  // no soportada como KHR_materials_pbrSpecularGlossiness), se cae a una caja de
+  // respaldo sin abortar la carga. Esenciales (entorno + personajes): si fallan,
+  // se propaga el error y boot() usa el entorno procedural completo.
   const jobs = [
     { key: 'env', url: ENV_URL },
-    { key: 'tv', url: TV_URL },
-    { key: 'altar', url: ALTAR_URL },
-    { key: 'cross', url: RITUAL_OBJ_URL },
+    { key: 'tv', url: TV_URL, optional: true },
+    { key: 'altar', url: ALTAR_URL, optional: true },
+    { key: 'cross', url: RITUAL_OBJ_URL, optional: true },
     ...chosen.map((name) => ({ key: name, url: charUrl(name) })),
   ];
   let done = 0;
   const results = {};
   await Promise.all(jobs.map(async (job) => {
-    results[job.key] = await loadGLB(job.url);
+    try {
+      results[job.key] = await loadGLB(job.url);
+    } catch (e) {
+      if (!job.optional) throw e;
+      console.warn('Prop opcional no cargó (se usa caja de respaldo):', job.url, e.message);
+      results[job.key] = null;
+    }
     done++; onProgress(done / jobs.length);
   }));
   return {

@@ -34,6 +34,7 @@ const GRID = 26;
 const MATCH_TIME = 180;
 const NUM_HUNTERS = 8;
 const NUM_RITUAL_OBJECTS = 4;
+const RITUAL_SPREAD = 18;   // radio (celdas) de la región donde caen altar+objetos
 const HUNTER_SPEED = 2.8;
 const HUNTER_FLEE_SPEED = 3.6;
 
@@ -211,8 +212,13 @@ function placeProp(gltf, wx, wz, targetH, faceCenter) {
 }
 
 function makeRitual(assets) {
-  // Celdas repartidas: la primera para el altar, el resto para los objetos.
-  const cells = spreadCells(NUM_RITUAL_OBJECTS + 1, (x, z) => (x <= 5 && z <= 7));
+  // El nivel horneado es enorme (~150×150); si repartiéramos altar y objetos por
+  // TODO el mapa, acarrear un objeto cruzaría cientos de celdas y el ritual sería
+  // inviable. Acotamos altar+objetos a una región (hub + radio): exige explorar
+  // para encontrar la zona, pero el transporte es razonable. RITUAL_SPREAD tunea
+  // cuánto se dispersan dentro de la región.
+  const hub = REACH.list[Math.floor(Math.random() * REACH.list.length)];
+  const cells = spreadCells(NUM_RITUAL_OBJECTS + 1, (x, z) => (Math.abs(x - hub[0]) + Math.abs(z - hub[1])) > RITUAL_SPREAD);
   const [agx, agz] = cells[0], [awx, awz] = worldOf(agx, agz);
   const objCells = cells.slice(1, NUM_RITUAL_OBJECTS + 1);
   ritual = RIT.createRitual(objCells, [agx, agz], { NEED_CHANNELERS: 2 });
@@ -524,7 +530,6 @@ function drawMinimap() {
   mmCtx.fillStyle = '#9d4edd'; mmCtx.fillRect(agx * cs - 2, agz * cs - 2, cs + 3, cs + 3); // altar
   for (const o of ritual.objects) {
     if (o.status === RIT.OBJ.DEPOSITED) continue;
-    if (!BB.objectives.has(AIB.cellKey(o.gx, o.gz)) && o.status === RIT.OBJ.ON_MAP) continue; // solo descubiertos
     mmCtx.fillStyle = o.status === RIT.OBJ.CARRIED ? '#ffd166' : '#d8c089';
     mmCtx.fillRect(o.gx * cs - 1, o.gz * cs - 1, cs + 1.5, cs + 1.5);
   }
@@ -582,11 +587,8 @@ function updateBlackboard(dt) {
     const [gx, gz] = cellOf(h.pos.x, h.pos.z);
     AIB.discoverAround(BB, gx, gz, VISION_R, isOpenCell);
   }
-  // Objetos sueltos + altar descubiertos -> objetivos conocidos por la IA.
-  for (const [gx, gz] of RIT.discoverableCells(ritual)) {
-    const k = AIB.cellKey(gx, gz);
-    if (BB.discovered.has(k) && !BB.objectives.has(k)) BB.objectives.set(k, { gx, gz });
-  }
+  // (Objetos rituales + altar son CONOCIDOS desde el inicio: la IA los persigue
+  // directamente; la niebla solo rige peligro y exploración general.)
   AIB.decayDanger(BB, dt);
 }
 
@@ -635,11 +637,11 @@ function buildCandidates(h) {
       const carried = RIT.objectCarriedBy(ritual, h.id);
       if (carried) { cands = [{ gx: ritual.altar.gx, gz: ritual.altar.gz, bias: 5 }]; }
       else {
-        // objeto suelto descubierto sin portador, más cercano
+        // objeto suelto sin portador (conocidos desde el inicio), el más cercano
         cands = ritual.objects
-          .filter((o) => o.status === RIT.OBJ.ON_MAP && BB.objectives.has(AIB.cellKey(o.gx, o.gz)))
+          .filter((o) => o.status === RIT.OBJ.ON_MAP)
           .map((o) => ({ gx: o.gx, gz: o.gz, bias: 4 }));
-        if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 })); // nada descubierto -> explora
+        if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 })); // sin objetos sueltos -> explora
       }
       break;
     }
