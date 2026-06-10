@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cellKey, parseKey, createBlackboard } from '../js/ai.js';
-import { discoverAround, computeFrontier } from '../js/ai.js';
-import { bumpDanger, addEvent, decayDanger, dangerAt } from '../js/ai.js';
-import { deriveFear, updateFear } from '../js/ai.js';
-import { computeThreat, assignRoles, ROLES } from '../js/ai.js';
-import { scoreCell, chooseGoal } from '../js/ai.js';
-import { dispersalTargets } from '../js/ai.js';
-import { barkFor } from '../js/ai.js';
+import {
+  AI, cellKey, parseKey, createBlackboard,
+  discoverAround, computeFrontier,
+  bumpDanger, addEvent, decayDanger, dangerAt,
+  deriveFear, updateFear,
+  computeThreat, assignRoles, ROLES,
+  scoreCell, chooseGoal,
+  dispersalTargets,
+  barkFor,
+} from '../js/ai.js';
 
 const openAll = () => true;
 
@@ -51,8 +53,6 @@ test('computeFrontier devuelve vecinas abiertas no descubiertas', () => {
   assert.deepEqual(keys, ['1,2', '2,1', '2,3', '3,2']);
 });
 
-import { AI } from '../js/ai.js';
-
 test('bumpDanger acumula y dangerAt lee', () => {
   const bb = createBlackboard();
   bumpDanger(bb, 1, 1, 2);
@@ -84,6 +84,7 @@ test('deriveFear sube con estrés/baja cordura y baja con valentía', () => {
   const b = deriveFear(0.8, 0.2, 1); // igual pero muy valiente
   assert.ok(a > b);
   assert.ok(a > 0 && a <= 1);
+  assert.equal(deriveFear(0, 1, 1), 0); // el clamp evita miedo negativo con valentía máxima
 });
 
 test('updateFear entra en PÁNICO con estrés alto y cordura baja', () => {

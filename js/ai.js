@@ -27,6 +27,17 @@ export const AI = {
   W_RECENT: 2.0,         // penalización por celda recién visitada
   W_CURIOSITY: 0.5,      // sesgo de exploración (lo aplica la integración)
   BARK_CD: 4.0,          // cooldown de barks por agente (s)
+  // Pesos internos de fórmulas (extraídos al tuning; valores idénticos).
+  FEAR_W_STRESS: 0.6,        // peso del estrés en el miedo
+  FEAR_W_SANITY: 0.4,        // peso de (1-cordura) en el miedo
+  FEAR_W_BRAVERY: 0.25,      // descuento por valentía en el miedo
+  SANITY_DRAIN_AT: 0.6,      // estrés por encima del cual drena la cordura
+  THREAT_W_EVENT: 0.15,      // peso por evento reciente en la amenaza
+  THREAT_W_DEATH: 0.25,      // peso por muerte en la amenaza
+  THREAT_W_FEAR: 0.4,        // peso del miedo medio en la amenaza
+  DANGER_FEAR_BASE: 0.3,     // base de miedo al escalar la evasión de peligro
+  COHESION_DIST_SCALE: 0.1,  // escala de distancia en la cohesión
+  DISPERSAL_SELF_WEIGHT: 0.3,// descuento por distancia propia en dispersión
 };
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -37,7 +48,7 @@ export const parseKey = (k) => k.split(',').map(Number);
 export function createBlackboard() {
   return {
     discovered: new Set(),  // claves "gx,gz" vistas por el escuadrón
-    objectives: new Map(),  // clave -> {gx, gz, done}
+    objectives: new Map(),  // clave -> {gx, gz, idx} (idx en stations[])
     danger: new Map(),      // clave -> score
     events: [],             // {type, gx, gz, t}
     roster: [],             // estado público por agente (lo llena la integración)
@@ -98,7 +109,7 @@ export function dangerAt(bb, gx, gz) {
 
 // Miedo derivado de estrés, cordura y valentía (0..1).
 export function deriveFear(stress, sanity, bravery) {
-  return clamp01(0.6 * stress + 0.4 * (1 - sanity) - 0.25 * bravery);
+  return clamp01(AI.FEAR_W_STRESS * stress + AI.FEAR_W_SANITY * (1 - sanity) - AI.FEAR_W_BRAVERY * bravery);
 }
 
 // Actualiza estrés/cordura/miedo/pánico de un agente. PURA: no muta `agent`,
@@ -113,7 +124,7 @@ export function updateFear(agent, ctx, dt, p = AI) {
   if (ctx.alone) up += p.STRESS_ALONE;
   const down = (ctx.grouped && ctx.safe) ? p.STRESS_CALM : 0;
   stress = clamp01(stress + (up - down) * dt);
-  if (stress > 0.6) sanity = clamp01(sanity - p.SANITY_DRAIN * dt);
+  if (stress > p.SANITY_DRAIN_AT) sanity = clamp01(sanity - p.SANITY_DRAIN * dt);
   else if (ctx.grouped && ctx.safe) sanity = clamp01(sanity + p.SANITY_RECOVER * dt);
   const fear = deriveFear(stress, sanity, agent.bravery);
   let panic = agent.panic;
@@ -134,9 +145,9 @@ export const ROLES = {
 export function computeThreat(ctx, p = AI) {
   let t = 0;
   if (ctx.hunting) t += 1;
-  t += 0.15 * (ctx.recentEvents || 0);
-  t += 0.25 * (ctx.deaths || 0);
-  t += 0.4 * (ctx.avgFear || 0);
+  t += p.THREAT_W_EVENT * (ctx.recentEvents || 0);
+  t += p.THREAT_W_DEATH * (ctx.deaths || 0);
+  t += p.THREAT_W_FEAR * (ctx.avgFear || 0);
   return Math.min(1, t);
 }
 
@@ -167,7 +178,7 @@ export function assignRoles(agents, threat, p = AI) {
 export function scoreCell(cand, agent, bb, allies, p = AI) {
   const { gx, gz } = cand;
   let s = cand.bias || 0;
-  s -= p.W_DANGER * dangerAt(bb, gx, gz) * (0.3 + agent.fear);
+  s -= p.W_DANGER * dangerAt(bb, gx, gz) * (p.DANGER_FEAR_BASE + agent.fear);
   if (agent.recentCells && agent.recentCells.includes(cellKey(gx, gz))) s -= p.W_RECENT;
   if (allies && allies.length) {
     let dmin = Infinity;
@@ -175,7 +186,7 @@ export function scoreCell(cand, agent, bb, allies, p = AI) {
       const d = Math.abs(a.gx - gx) + Math.abs(a.gz - gz);
       if (d < dmin) dmin = d;
     }
-    s -= p.W_COHESION * agent.fear * dmin * 0.1;
+    s -= p.W_COHESION * agent.fear * dmin * p.COHESION_DIST_SCALE;
   }
   return s;
 }
@@ -206,7 +217,7 @@ export function dispersalTargets(agents, ghost, safeCells, p = AI) {
     for (const c of safeCells) {
       const k = cellKey(c.gx, c.gz);
       if (used.has(k)) continue;
-      const score = dist(c.gx, c.gz, ghost.gx, ghost.gz) - 0.3 * dist(c.gx, c.gz, a.gx, a.gz);
+      const score = dist(c.gx, c.gz, ghost.gx, ghost.gz) - p.DISPERSAL_SELF_WEIGHT * dist(c.gx, c.gz, a.gx, a.gz);
       if (score > bs) { bs = score; best = c; }
     }
     if (best) { used.add(cellKey(best.gx, best.gz)); out.set(a.id, [best.gx, best.gz]); }
