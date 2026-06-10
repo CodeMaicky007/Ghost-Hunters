@@ -367,18 +367,21 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     // Si la meta cambia, invalida el waypoint BFS para no seguir 0.35s la ruta vieja.
     if (!h.goal || !newGoal || newGoal[0] !== h.goal[0] || newGoal[1] !== h.goal[1]) h.next = null;
     h.goal = newGoal;
-    const onObj = nearestIncompleteStation(h.pos.x, h.pos.z);
-    if (onObj >= 0 && BB.objectives.has(AIB.cellKey(stations[onObj].gx, stations[onObj].gz))
-        && Math.hypot(stations[onObj].wx - h.pos.x, stations[onObj].wz - h.pos.z) < 0.9) {
-      h.working = onObj;
-      const s = stations[onObj];
-      s.progress = Math.min(1, s.progress + dt / MISSION_TIME);
-      if (s.progress >= 1) s.done = true;
-      refreshStation(s);
-    } else {
-      h.working = -1;
-      if (h.goal) stepToward(h, h.goal, HUNTER_SPEED, dt);
+    h.working = -1;
+    // FETCH: si carga un objeto y llega al altar -> deposita; si no carga y llega
+    // a un objeto suelto descubierto -> lo coge.
+    const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
+    const carried = RIT.objectCarriedBy(ritual, h.id);
+    if (carried) {
+      if (Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE) RIT.depositCarried(ritual, h.id);
+    } else if (h.role === RIT.RROLE.FETCH) {
+      for (const o of ritual.objects) {
+        if (o.status !== RIT.OBJ.ON_MAP) continue;
+        const [owx, owz] = worldOf(o.gx, o.gz);
+        if (Math.hypot(h.pos.x - owx, h.pos.z - owz) <= 0.7) { RIT.pickup(ritual, o.id, h.id); break; }
+      }
     }
+    if (h.goal) stepToward(h, h.goal, HUNTER_SPEED, dt);
     pushRecent(h);
   }
   const dx = h.pos.x - prevX, dz = h.pos.z - prevZ;
@@ -580,7 +583,10 @@ function runCoordinator(dt, hunting) {
   const recentEvents = BB.events.filter((e) => e.t - GAME.timeLeft < 5).length;
   BB.events = BB.events.filter((e) => e.t - GAME.timeLeft < 30); // poda eventos viejos
   const threat = AIB.computeThreat({ hunting, recentEvents, deaths, avgFear });
-  const roles = AIB.assignRoles(hunters.map((h) => ({ id: h.id, alive: h.alive, bravery: h.bravery })), threat);
+  const roles = RIT.assignRitualRoles(
+    hunters.map((h) => { const [gx, gz] = cellOf(h.pos.x, h.pos.z); return { id: h.id, alive: h.alive, bravery: h.bravery, gx, gz }; }),
+    ritual, threat
+  );
   for (const h of hunters) if (roles.has(h.id)) h.role = roles.get(h.id);
   // Rendezvous = celda del aliado más valiente (líder), para REGROUP.
   const leader = aliveList.slice().sort((a, b) => b.bravery - a.bravery)[0];
@@ -590,33 +596,47 @@ function runCoordinator(dt, hunting) {
 // Construye celdas candidatas {gx,gz,bias} según el rol del agente.
 function buildCandidates(h) {
   const frontier = FRONTIER;   // calculado 1× por frame en update()
-  const objs = [...BB.objectives.values()].filter((o) => !stations[o.idx].done);
   const midx = MID_X();
   const near = (cell) => -(Math.abs(cell.gx - cellOf(h.pos.x, h.pos.z)[0]) + Math.abs(cell.gz - cellOf(h.pos.x, h.pos.z)[1]));
   let cands = [];
   switch (h.role) {
-    case AIB.ROLES.EXPLORE_A:
-    case AIB.ROLES.EXPLORE_B: {
-      const wantLeft = h.role === AIB.ROLES.EXPLORE_A;
-      cands = frontier
-        .filter(([gx]) => (wantLeft ? gx < midx : gx >= midx))
-        .map(([gx, gz]) => ({ gx, gz, bias: AIB.AI.W_CURIOSITY * h.bravery }));
+    case RIT.RROLE.EXPLORE_A:
+    case RIT.RROLE.EXPLORE_B: {
+      const wantLeft = h.role === RIT.RROLE.EXPLORE_A;
+      cands = frontier.filter(([gx]) => (wantLeft ? gx < midx : gx >= midx)).map(([gx, gz]) => ({ gx, gz, bias: AIB.AI.W_CURIOSITY * h.bravery }));
       if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: AIB.AI.W_CURIOSITY * h.bravery }));
       break;
     }
-    case AIB.ROLES.SCAVENGE:
-      cands = objs.map((o) => ({ gx: o.gx, gz: o.gz, bias: 3 }));
-      if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 }));
+    case RIT.RROLE.FETCH: {
+      const carried = RIT.objectCarriedBy(ritual, h.id);
+      if (carried) { cands = [{ gx: ritual.altar.gx, gz: ritual.altar.gz, bias: 5 }]; }
+      else {
+        // objeto suelto descubierto sin portador, más cercano
+        cands = ritual.objects
+          .filter((o) => o.status === RIT.OBJ.ON_MAP && BB.objectives.has(AIB.cellKey(o.gx, o.gz)))
+          .map((o) => ({ gx: o.gx, gz: o.gz, bias: 4 }));
+        if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 })); // nada descubierto -> explora
+      }
       break;
-    case AIB.ROLES.GUARD:
-      cands = objs.map((o) => ({ gx: o.gx, gz: o.gz, bias: 1.5 }));
-      if (!cands.length) cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 }));
+    }
+    case RIT.RROLE.CHANNELER:
+    case RIT.RROLE.GUARD:
+      cands = [{ gx: ritual.altar.gx, gz: ritual.altar.gz, bias: 5 }];
       break;
-    case AIB.ROLES.REGROUP:
-      cands = rendezvous
-        ? [{ gx: rendezvous[0], gz: rendezvous[1], bias: 4 }]
-        : frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 })); // sin punto de reunión: explora
+    case RIT.RROLE.DEFEND: {
+      // celda entre el fantasma y el altar (un paso desde el altar hacia el fantasma)
+      const [ggx, ggz] = cellOf(pos.x, pos.z);
+      const dx = Math.sign(ggx - ritual.altar.gx), dz = Math.sign(ggz - ritual.altar.gz);
+      cands = [{ gx: ritual.altar.gx + dx, gz: ritual.altar.gz + dz, bias: 3 }, { gx: ritual.altar.gx, gz: ritual.altar.gz, bias: 1 }];
       break;
+    }
+    case RIT.RROLE.DISTRACT: {
+      const [ggx, ggz] = cellOf(pos.x, pos.z);
+      cands = [{ gx: ggx, gz: ggz, bias: 3 }];
+      break;
+    }
+    default:
+      cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 }));
   }
   // Prioriza por cercanía para no recalcular rutas larguísimas cada vez.
   return cands.sort((a, b) => near(b) - near(a)).slice(0, 12);
