@@ -7,6 +7,7 @@ import { deriveFear, updateFear } from '../js/ai.js';
 import { computeThreat, assignRoles, ROLES } from '../js/ai.js';
 import { scoreCell, chooseGoal } from '../js/ai.js';
 import { dispersalTargets } from '../js/ai.js';
+import { barkFor } from '../js/ai.js';
 
 const openAll = () => true;
 
@@ -188,4 +189,18 @@ test('dispersalTargets no asigna más agentes que celdas seguras', () => {
   const agents = [{ id: 0, gx: 0, gz: 0 }, { id: 1, gx: 0, gz: 0 }];
   const out = dispersalTargets(agents, { gx: 5, gz: 5 }, [{ gx: 1, gz: 1 }], AI);
   assert.equal(out.size, 1);
+});
+
+test('barkFor respeta el cooldown salvo prioridad alta', () => {
+  const ag = { lastBarkT: 100 };
+  assert.equal(barkFor(ag, 'scared', 101, AI), null); // dentro del cooldown
+  const b = barkFor(ag, 'scared', 100 + AI.BARK_CD + 0.1, AI);
+  assert.equal(b.text, 'No me gusta esto…');
+  // 'hunt' (prio alta) ignora el cooldown
+  const h = barkFor(ag, 'hunt', 101, AI);
+  assert.equal(h.text, '¡CORRED!');
+});
+
+test('barkFor con trigger desconocido devuelve null', () => {
+  assert.equal(barkFor({ lastBarkT: -999 }, 'nope', 0, AI), null);
 });
