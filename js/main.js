@@ -38,18 +38,20 @@ const NUM_RITUAL_OBJECTS = 4;
 const RITUAL_SPREAD = 18;   // radio (celdas) de la región donde caen altar+objetos
 const NUM_MISSIONS = 6;
 const REPAIR_RATE = 0.12;   // progreso/seg de una misión (~8s con un bot)
-const SHAKEN_DUR = 4;       // s que dura el "aturdimiento" por rugido
-const SHAKEN_SLOW = 0.4;    // multiplicador de tarea/movimiento mientras shaken
 const MISSION_HEIGHT = 0.95; // alto objetivo del monitor
 const HUNTER_SPEED = 2.8;
 const HUNTER_FLEE_SPEED = 3.6;
 
 const KILL_RANGE = 1.8;
 
-const SCARE_RANGE = 6;
-const ROAR_CD = 8;
-const REVEAL_DUR = 5;
-const ROAR_INTERRUPT_WINDOW = 0.3;   // ventana (s) tras un rugido en la que interrumpe la canalización
+// Combate R6: vidas/derribo/mori + huida
+const HIT_COOLDOWN = 1.5;   // s entre golpes al mismo bot (evita doble-hit instantáneo)
+const LIVES_UNMARKED = 2;   // vidas por cacería de un bot SIN marcar
+const REVIVE_TIME = 4;      // s de canal de reanimación de un KO
+const REVIVE_BLOCK = 9;     // u: el fantasma a menos de esto bloquea la reanimación
+const MORI_RANGE = 1.6;     // u: alcance del Memento Mori sobre un KO
+const MORI_TIME = 2;        // s de la ejecución
+const FLEE_RADIUS = 14;     // celdas: radio del anillo de candidatas de huida
 
 const PARRY = PARRY_DEFAULTS;   // fuente única en logic.js (tuneable aquí si diverge)
 const STUN_DUR = 3;      // s de aturdimiento del fantasma tras un parry
@@ -329,6 +331,7 @@ function makeBoxHunter(color) {
     play() {},
     showBark() {},
     glanceBack() {},
+    setMarked() {},
     update() {},
   };
 }
@@ -346,7 +349,8 @@ function makeHunters(chars) {
       flee: 0, repath: 0, next: null, working: -1,
       // --- estado IA ---
       bravery: 0.2 + Math.random() * 0.7,   // personalidad fija
-      stress: 0, sanity: 1, fear: 0, panic: false, parryUsed: false, shaken: 0,
+      stress: 0, sanity: 1, fear: 0, panic: false, parryUsed: false,
+      lives: 2, ko: false, reviveT: 0, hitCd: 0,    // combate R6 (vidas/derribo)
       role: AIB.ROLES.EXPLORE_A, recentCells: [], lastBarkT: -999, goal: null,
     });
   }
@@ -399,9 +403,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   const [hgx, hgz] = cellOf(h.pos.x, h.pos.z);
   const trapped = ABL.agentInTrap(ab, hgx, hgz);
   if (trapped) { h.stress = Math.min(1, h.stress + 0.4 * dt); if (Math.random() < 0.02) h.next = null; }
-  const shakenSlow = h.shaken > 0 ? SHAKEN_SLOW : 1;   // evaluado 1 vez: movimiento y reparación van a la par
-  const speedMul = (trapped ? 0.5 : 1) * shakenSlow;
-  if (h.shaken > 0) h.shaken = Math.max(0, h.shaken - dt);
+  const speedMul = trapped ? 0.5 : 1;
   // Sentido del fantasma (invisible): cuanto más cerca, más se alejan. Nunca van hacia él.
   if (!hunting) {
     const dG = Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z);
@@ -450,7 +452,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
         const [mwx, mwz] = worldOf(mi.gx, mi.gz);
         if (Math.hypot(h.pos.x - mwx, h.pos.z - mwz) <= 1.0) { m = mi; break; }
       }
-      if (m) { h.working = 0; RIT.workMission(ritual, m.id, dt, REPAIR_RATE * shakenSlow); }
+      if (m) { h.working = 0; RIT.workMission(ritual, m.id, dt, REPAIR_RATE); }
       else if (h.goal) stepToward(h, h.goal, HUNTER_SPEED * speedMul, dt);
     } else {
       // GATHER: recoger/depositar cruces (R2) — bloque existente sin cambios.
@@ -499,11 +501,37 @@ function killHunter(h) {
 // ============================================================
 const pos = new THREE.Vector3(CELL, EYE, CELL);
 let yaw = 0, pitch = 0, currentFloor = 0;
-let roarCd = 0, revealTimer = 0, revealedBot = null;
 let debugAI = false;   // overlay de depuración de la IA (tecla O)
 let escalated = false;   // al agotarse el tiempo: cacería permanente
 let stun = 0;   // s restantes de aturdimiento del fantasma (por parry)
+let moriT = 0, moriTarget = null;   // ejecución (Memento Mori) en curso
 const ab = ABL.createAbilities();   // energía + habilidades del fantasma
+
+// Línea de visión por grid: muestrea el segmento contra los muros (sin Raycaster).
+function gridLOS(x0, z0, x1, z1) {
+  const d = Math.hypot(x1 - x0, z1 - z0), steps = Math.max(1, Math.ceil(d / (CELL * 0.5)));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const [gx, gz] = cellOf(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t);
+    if (isWall(gx, gz)) return false;
+  }
+  return true;
+}
+
+// Tecla 1: fija como objetivo de observación al bot vivo no-KO más alineado con la mira.
+function selectObserveTarget() {
+  const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  let best = null, bs = 0.92; // cos ~23°: hay que apuntarle de verdad
+  for (const h of hunters) {
+    if (!h.alive || h.ko) continue;
+    const to = new THREE.Vector3(h.pos.x - pos.x, 0, h.pos.z - pos.z);
+    const d = to.length(); if (d < 0.5 || d > ABL.AB.OBS_RANGE) continue;
+    to.normalize();
+    const dot = to.dot(fwd);
+    if (dot > bs && gridLOS(pos.x, pos.z, h.pos.x, h.pos.z)) { bs = dot; best = h; }
+  }
+  if (best) { ABL.setObserveTarget(ab, best.id); sfx.parry(); }
+}
 
 function groundHeight() { return 0; }
 // Colisión del jugador contra el grid FINO: recorre toda la huella del jugador
@@ -519,7 +547,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyO') debugAI = !debugAI; // overlay sin pointerlock para depurar
     return;
   }
-  if (e.code === 'Digit1' || e.code === 'KeyQ') roar();
+  if (e.code === 'Digit1' || e.code === 'KeyQ') selectObserveTarget();
   else if (e.code === 'Digit2') useTeleport();
   else if (e.code === 'Digit3') useTrap();
   else if (e.code === 'Digit4') useDecoy();
@@ -528,24 +556,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'KeyO') debugAI = !debugAI;
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
-addEventListener('mousedown', (e) => { if (e.button === 0) roar(); });
-function roar() {
-  if (stun > 0) return;
-  if (roarCd > 0 || GAME.state !== 'playing' || document.pointerLockElement !== canvasEl) return;
-  roarCd = ROAR_CD; sfx.roar();
-  { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'roar', gx, gz, GAME.timeLeft); }
-  let best = null, bd = -1;
-  for (const h of hunters) { if (!h.alive) continue; const d = (h.pos.x - pos.x) ** 2 + (h.pos.z - pos.z) ** 2; if (d > bd) { bd = d; best = h; } }
-  revealedBot = best; revealTimer = REVEAL_DUR;
-  for (const h of hunters) {
-    if (!h.alive) continue;
-    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= SCARE_RANGE) {
-      h.shaken = SHAKEN_DUR;                       // no huyen: se desestabilizan
-      h.stress = Math.min(1, h.stress + 0.25);
-      h.sanity = Math.max(0, h.sanity - 0.15);
-    }
-  }
-}
+addEventListener('mousedown', (e) => { if (e.button === 0 && document.pointerLockElement === canvasEl) selectObserveTarget(); });
 
 // ============================================================
 //  Cacería + partida
@@ -604,8 +615,10 @@ function updateHUD(hunting) {
   }
   el('hunters').textContent = hunters.filter((h) => h.alive).length;
   el('floor').textContent = '🟡 0';
-  el('cd1').textContent = roarCd > 0 ? `${roarCd.toFixed(1)}s` : 'LISTO';
-  el('ab1').classList.toggle('ready', roarCd <= 0);
+  // Slot 1 = Observación: % del objetivo actual (o MARCADO).
+  const ot = ab.observe.target;
+  el('cd1').textContent = ot == null ? 'APUNTA+1' : (ABL.isMarked(ab, ot) ? 'MARCADO' : Math.round(ABL.obsProgress(ab, ot) * 100) + '%');
+  el('ab1').classList.toggle('ready', ot != null);
   el('nextHunt').textContent = hunting ? Math.ceil(hunt.active) + 's' : '—';
   banner.className = hunting ? 'active' : 'hidden';
   if (hunting) banner.textContent = '⟲ CACERÍA — LUCES FUERA ⟲';
@@ -646,7 +659,6 @@ function drawMinimap() {
     mmCtx.fillStyle = o.status === RIT.OBJ.CARRIED ? '#ffd166' : '#d8c089';
     mmCtx.fillRect(o.gx * cs - 1, o.gz * cs - 1, cs + 1.5, cs + 1.5);
   }
-  if (revealTimer > 0 && revealedBot && revealedBot.alive) { mmCtx.fillStyle = '#ff3b3b'; mmCtx.beginPath(); mmCtx.arc((revealedBot.pos.x / CELL) * cs, (revealedBot.pos.z / CELL) * cs, 4, 0, 7); mmCtx.fill(); }
   mmCtx.fillStyle = '#c77dff'; mmCtx.beginPath(); mmCtx.arc((pos.x / CELL) * cs, (pos.z / CELL) * cs, 3, 0, 7); mmCtx.fill();
   if (debugAI) {
     const COLR = { REPAIR: '#00d4ff', EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', FETCH: '#ffd166', GUARD: '#ffae42', CHANNELER: '#c77dff', DEFEND: '#37d67a', DISTRACT: '#ff3b3b' };
@@ -864,9 +876,7 @@ function update(dt) {
   GAME.timeLeft -= dt;
   if (GAME.timeLeft <= 0 && !escalated) { escalated = true; GAME.timeLeft = 0; if (hunt.active <= 0) startHunt(); }
   NOW_SEC = performance.now() / 1000;   // reloj monótono muestreado 1× por frame
-  if (roarCd > 0) roarCd = Math.max(0, roarCd - dt);
   if (stun > 0) stun = Math.max(0, stun - dt);
-  if (revealTimer > 0) revealTimer = Math.max(0, revealTimer - dt);
   const hunting = updateHunt(dt);
   // Energía: gana con el tiempo + bonus si hay un superviviente cerca (acecho).
   let nearSurvivor = false;
@@ -874,6 +884,21 @@ function update(dt) {
   const energyBefore = ab.energy;
   ABL.tickEnergy(ab, dt, { nearSurvivor }); // cooldowns y visión espectral siguen corriendo en cacería
   if (hunting) ab.energy = energyBefore;     // solo se congela la energía (no encadenar cacerías)
+  // Observación: sube si el objetivo está vivo, a rango, con LOS y en el cono de visión.
+  {
+    const t = hunters.find((x) => x.id === ab.observe.target);
+    let visible = false;
+    if (t && t.alive && !t.ko) {
+      const d = Math.hypot(t.pos.x - pos.x, t.pos.z - pos.z);
+      if (d <= ABL.AB.OBS_RANGE && gridLOS(pos.x, pos.z, t.pos.x, t.pos.z)) {
+        const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+        const to = new THREE.Vector3(t.pos.x - pos.x, 0, t.pos.z - pos.z).normalize();
+        visible = to.dot(fwd) > 0.5; // cono ~60°
+      }
+    }
+    ABL.tickObserve(ab, dt, { visible });
+    for (const h of hunters) if (h.alive) h.model.setMarked(ABL.isMarked(ab, h.id));
+  }
   if (senseGain) {
     let dmin = Infinity;
     for (const h of hunters) if (h.alive) dmin = Math.min(dmin, Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z));
@@ -907,7 +932,7 @@ function update(dt) {
     const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
     let nCh = 0;
     for (const h of hunters) if (h.alive && Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 0.6) nCh++;
-    const ghostNear = Math.hypot(pos.x - ax, pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 1.5 && (hunt.active > 0 || roarCd > ROAR_CD - ROAR_INTERRUPT_WINDOW);
+    const ghostNear = Math.hypot(pos.x - ax, pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 1.5 && hunt.active > 0; // sin rugido: interrumpe la cacería junto al altar
     RIT.channelTick(ritual, nCh, dt, { interrupt: ghostNear });
   }
   syncRitualMeshes();

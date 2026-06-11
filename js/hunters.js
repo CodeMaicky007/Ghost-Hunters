@@ -31,6 +31,7 @@ export class HunterModel {
     this._bubbleT = 0;         // tiempo restante de la burbuja
     this._lookBack = 0;        // temporizador de "mirar atrás"
     this._spectral = false;    // estado espectral aplicado (evita reclonar cada frame)
+    this._markSpr = null;      // indicador de MARCADO (observación al 100%)
   }
 
   play(clipName, opts = {}) {
@@ -95,6 +96,18 @@ export class HunterModel {
 
   // Lenguaje corporal: oscilación breve de yaw como "mirar atrás".
   glanceBack(dur = 0.8) { this._lookBack = dur; }
+
+  // Indicador de MARCADO (rombo rojo sobre la cabeza; los muros lo ocultan).
+  setMarked(on) {
+    if (on && !this._markSpr) {
+      const c = document.createElement('canvas'); c.width = c.height = 32;
+      const g = c.getContext('2d'); g.fillStyle = '#ff2040';
+      g.beginPath(); g.moveTo(16, 2); g.lineTo(30, 16); g.lineTo(16, 30); g.lineTo(2, 16); g.closePath(); g.fill();
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: true, transparent: true }));
+      spr.scale.set(0.3, 0.3, 1); spr.position.set(0, 2.45, 0);
+      this.root.add(spr); this._markSpr = spr;
+    } else if (!on && this._markSpr) { this.root.remove(this._markSpr); this._markSpr = null; }
+  }
 
   update(dt) {
     if (this._bubbleT > 0) { this._bubbleT -= dt; if (this._bubbleT <= 0 && this._bubble) { this.root.remove(this._bubble); this._bubble = null; } }
