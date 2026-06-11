@@ -4,7 +4,7 @@
 // ============================================================
 
 export const AB = {
-  ENERGY_REGEN: 0.06,    // energía/seg (barra llena en ~16 s base)
+  ENERGY_REGEN: 0.09,    // energía/seg (barra llena en ~11 s base; cacerías más frecuentes)
   STALK_BONUS: 0.05,     // +energía/seg acechando (cerca de supervivientes)
   COST_TELEPORT: 0.25,
   COST_TRAP: 0.3,
@@ -17,7 +17,7 @@ export const AB = {
   TRAP_RADIUS: 2,        // celdas (Manhattan)
   DECOY_DUR: 8,          // s que dura el señuelo
   SPECTRAL_DUR: 6,       // s de visión espectral
-  HUNT_DUR: 45,          // s de cacería activada
+  HUNT_DUR: 60,          // s de cacería activada (más larga tras playtest)
   HUNT_SPEED_MULT: 1.3,  // multiplicador de velocidad del fantasma en cacería
   SENSE_RANGE: 10,       // unidades de mundo: rango de "sonido"/sentido (suben al detectarte y se alejan)
   TELEPORT_RANGE: 12,    // celdas máx de teletransporte
