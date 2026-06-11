@@ -8,7 +8,7 @@ import {
 } from '../js/ritual.js';
 
 test('createRitual inicializa objetos ON_MAP y fase GATHER', () => {
-  const r = createRitual([[2, 3], [5, 6]], [4, 4], { NEED_CHANNELERS: 2, CHANNEL_TIME: 10 });
+  const r = createRitual([],[[2, 3], [5, 6]], [4, 4], { NEED_CHANNELERS: 2, CHANNEL_TIME: 10 });
   assert.equal(r.phase, PHASE.GATHER);
   assert.equal(r.channel, 0);
   assert.equal(r.altar.gx, 4);
@@ -24,13 +24,13 @@ test('createRitual inicializa objetos ON_MAP y fase GATHER', () => {
 });
 
 test('createRitual usa los defaults RCFG si no se pasan opts', () => {
-  const r = createRitual([[1, 1]], [0, 0]);
+  const r = createRitual([],[[1, 1]], [0, 0]);
   assert.equal(r.needChannelers, RCFG.NEED_CHANNELERS);
   assert.equal(r.channelTime, RCFG.CHANNEL_TIME);
 });
 
 test('pickup coge un objeto ON_MAP y lo marca CARRIED', () => {
-  const r = createRitual([[2, 3]], [4, 4]);
+  const r = createRitual([],[[2, 3]], [4, 4]);
   assert.equal(pickup(r, 0, 7), true);
   assert.equal(r.objects[0].status, OBJ.CARRIED);
   assert.equal(r.objects[0].carrier, 7);
@@ -38,21 +38,21 @@ test('pickup coge un objeto ON_MAP y lo marca CARRIED', () => {
 });
 
 test('pickup rechaza coger un segundo objeto si ya llevas uno', () => {
-  const r = createRitual([[1, 1], [2, 2]], [0, 0]);
+  const r = createRitual([],[[1, 1], [2, 2]], [0, 0]);
   pickup(r, 0, 7);
   assert.equal(pickup(r, 1, 7), false); // ya cargando -> no
   assert.equal(r.objects[1].status, OBJ.ON_MAP);
 });
 
 test('objectCarriedBy devuelve el objeto que carga un agente', () => {
-  const r = createRitual([[2, 3], [5, 6]], [4, 4]);
+  const r = createRitual([],[[2, 3], [5, 6]], [4, 4]);
   pickup(r, 1, 3);
   assert.equal(objectCarriedBy(r, 3).id, 1);
   assert.equal(objectCarriedBy(r, 99), null);
 });
 
 test('dropCarried suelta el objeto en la celda dada', () => {
-  const r = createRitual([[2, 3]], [4, 4]);
+  const r = createRitual([],[[2, 3]], [4, 4]);
   pickup(r, 0, 7);
   assert.equal(dropCarried(r, 7, 8, 9), true);
   assert.equal(r.objects[0].status, OBJ.ON_MAP);
@@ -62,7 +62,7 @@ test('dropCarried suelta el objeto en la celda dada', () => {
 });
 
 test('depositCarried marca DEPOSITED y lo fija al altar', () => {
-  const r = createRitual([[2, 3], [5, 6]], [4, 4]);
+  const r = createRitual([],[[2, 3], [5, 6]], [4, 4]);
   pickup(r, 0, 7);
   assert.equal(depositCarried(r, 7), true);
   assert.equal(r.objects[0].status, OBJ.DEPOSITED);
@@ -73,7 +73,7 @@ test('depositCarried marca DEPOSITED y lo fija al altar', () => {
 });
 
 test('depositar el último objeto pasa a fase CHANNEL', () => {
-  const r = createRitual([[2, 3], [5, 6]], [4, 4]);
+  const r = createRitual([],[[2, 3], [5, 6]], [4, 4]);
   pickup(r, 0, 1); depositCarried(r, 1);
   pickup(r, 1, 2); depositCarried(r, 2);
   assert.equal(allDeposited(r), true);
@@ -81,7 +81,7 @@ test('depositar el último objeto pasa a fase CHANNEL', () => {
 });
 
 function channeling() {
-  const r = createRitual([[1, 1]], [0, 0], { CHANNEL_TIME: 10, NEED_CHANNELERS: 2, CHANNEL_PENALTY: 0.5 });
+  const r = createRitual([],[[1, 1]], [0, 0], { CHANNEL_TIME: 10, NEED_CHANNELERS: 2, CHANNEL_PENALTY: 0.5 });
   pickup(r, 0, 1); depositCarried(r, 1); // fuerza CHANNEL
   return r;
 }
@@ -109,13 +109,13 @@ test('channelTick llega a DONE al 100%', () => {
 });
 
 test('channelTick no hace nada fuera de fase CHANNEL', () => {
-  const r = createRitual([[1, 1]], [0, 0]); // GATHER
+  const r = createRitual([],[[1, 1]], [0, 0]); // GATHER
   assert.equal(channelTick(r, 5, 1), PHASE.GATHER);
   assert.equal(r.channel, 0);
 });
 
 test('discoverableCells da altar + objetos ON_MAP (no los cargados/depositados)', () => {
-  const r = createRitual([[2, 3], [5, 6]], [4, 4]);
+  const r = createRitual([],[[2, 3], [5, 6]], [4, 4]);
   pickup(r, 0, 1); // objeto 0 pasa a CARRIED -> no descubrible como suelto
   const cells = discoverableCells(r).map(([x, z]) => x + ',' + z).sort();
   assert.deepEqual(cells, ['4,4', '5,6']); // altar + objeto 1 ON_MAP
@@ -124,7 +124,7 @@ test('discoverableCells da altar + objetos ON_MAP (no los cargados/depositados)'
 const mkAgents = (n) => Array.from({ length: n }, (_, i) => ({ id: i, alive: true, bravery: i / (n - 1), gx: i, gz: 0 }));
 
 test('GATHER: 8 vivos -> 4 FETCH + 2 EXPLORE_A + 2 EXPLORE_B; portador forzado a FETCH', () => {
-  const r = createRitual([[1, 1], [2, 2]], [0, 0]);
+  const r = createRitual([],[[1, 1], [2, 2]], [0, 0]);
   const agents = mkAgents(8);
   const roles = assignRitualRoles(agents, r, 0);
   const counts = {};
@@ -139,7 +139,7 @@ test('GATHER: 8 vivos -> 4 FETCH + 2 EXPLORE_A + 2 EXPLORE_B; portador forzado a
 });
 
 test('GATHER con escuadra pequeña (n=4): 2 FETCH + 1 EXPLORE_A + 1 EXPLORE_B', () => {
-  const r = createRitual([[1, 1]], [0, 0]);
+  const r = createRitual([],[[1, 1]], [0, 0]);
   const roles = assignRitualRoles(mkAgents(4), r, 0);
   const counts = {};
   for (const v of roles.values()) counts[v] = (counts[v] || 0) + 1;
@@ -149,7 +149,7 @@ test('GATHER con escuadra pequeña (n=4): 2 FETCH + 1 EXPLORE_A + 1 EXPLORE_B', 
 });
 
 test('CHANNEL: needChannelers como CHANNELER (los más cercanos al altar), resto DEFEND/DISTRACT', () => {
-  const r = createRitual([[1, 1], [2, 2]], [0, 0]);
+  const r = createRitual([],[[1, 1], [2, 2]], [0, 0]);
   pickup(r, 0, 1); depositCarried(r, 1); pickup(r, 1, 2); depositCarried(r, 2); // -> CHANNEL
   // agentes a distancias crecientes del altar (gx); needChannelers=2
   const agents = mkAgents(6);
@@ -163,9 +163,19 @@ test('CHANNEL: needChannelers como CHANNELER (los más cercanos al altar), resto
 });
 
 test('CHANNEL bajo amenaza alta: sin DISTRACT', () => {
-  const r = createRitual([[1, 1]], [0, 0]);
+  const r = createRitual([],[[1, 1]], [0, 0]);
   pickup(r, 0, 1); depositCarried(r, 1); // -> CHANNEL
   const agents = mkAgents(6);
   const roles = assignRitualRoles(agents, r, 1); // threat alto
   assert.ok(![...roles.values()].includes(RROLE.DISTRACT));
+});
+
+test('createRitual con misiones empieza en MISSIONS; sin misiones, en GATHER', () => {
+  const conM = createRitual([[1, 1]], [[2, 2]], [0, 0]);
+  assert.equal(conM.phase, PHASE.MISSIONS);
+  assert.equal(conM.missions.length, 1);
+  assert.equal(conM.needMissions, 1);
+  const sinM = createRitual([], [[2, 2]], [0, 0]);
+  assert.equal(sinM.phase, PHASE.GATHER);
+  assert.equal(sinM.missions.length, 0);
 });

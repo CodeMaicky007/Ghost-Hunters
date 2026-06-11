@@ -13,18 +13,20 @@ export const RCFG = {
 };
 
 export const OBJ = { ON_MAP: 'ON_MAP', CARRIED: 'CARRIED', DEPOSITED: 'DEPOSITED' };
-export const PHASE = { GATHER: 'GATHER', CHANNEL: 'CHANNEL', DONE: 'DONE' };
-// Roles de fase: reutiliza los de R1 + añade los específicos del ritual.
+export const PHASE = { MISSIONS: 'MISSIONS', GATHER: 'GATHER', CHANNEL: 'CHANNEL', DONE: 'DONE' };
+// Roles de fase: reutiliza los de R1 + añade los específicos de la ruta de victoria.
 // (CHANNELER != PHASE.CHANNEL: el rol del canalizador usa otra cadena para no colisionar con la fase.)
-export const RROLE = { ...ROLES, FETCH: 'FETCH', CHANNELER: 'CHANNELER', DEFEND: 'DEFEND', DISTRACT: 'DISTRACT' };
+export const RROLE = { ...ROLES, REPAIR: 'REPAIR', FETCH: 'FETCH', CHANNELER: 'CHANNELER', DEFEND: 'DEFEND', DISTRACT: 'DISTRACT' };
 
-export function createRitual(objectCells, altarCell, opts = {}) {
+export function createRitual(missionCells, objectCells, altarCell, opts = {}) {
   const p = { ...RCFG, ...opts };
   return {
     altar: { gx: altarCell[0], gz: altarCell[1] },
+    missions: missionCells.map(([gx, gz], i) => ({ id: i, gx, gz, progress: 0, done: false })),
     objects: objectCells.map(([gx, gz], i) => ({ id: i, gx, gz, status: OBJ.ON_MAP, carrier: null, homeGx: gx, homeGz: gz })),
-    phase: PHASE.GATHER,
+    phase: missionCells.length ? PHASE.MISSIONS : PHASE.GATHER,
     channel: 0,
+    needMissions: missionCells.length,
     needObjects: objectCells.length,
     needChannelers: p.NEED_CHANNELERS,
     channelTime: p.CHANNEL_TIME,
