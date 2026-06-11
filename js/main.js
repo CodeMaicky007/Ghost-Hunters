@@ -398,7 +398,8 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   const [hgx, hgz] = cellOf(h.pos.x, h.pos.z);
   const trapped = ABL.agentInTrap(ab, hgx, hgz);
   if (trapped) { h.stress = Math.min(1, h.stress + 0.4 * dt); if (Math.random() < 0.02) h.next = null; }
-  const speedMul = trapped ? 0.5 : 1;
+  const speedMul = (trapped ? 0.5 : 1) * (h.shaken > 0 ? SHAKEN_SLOW : 1);
+  if (h.shaken > 0) h.shaken = Math.max(0, h.shaken - dt);
   // Sentido del fantasma (invisible): cuanto más cerca, más se alejan. Nunca van hacia él.
   if (!hunting) {
     const dG = Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z);
@@ -439,20 +440,31 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     if (!h.goal || !newGoal || newGoal[0] !== h.goal[0] || newGoal[1] !== h.goal[1]) h.next = null;
     h.goal = newGoal;
     h.working = -1;
-    // FETCH: si carga un objeto y llega al altar -> deposita; si no carga y llega
-    // a un objeto suelto descubierto -> lo coge.
-    const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
-    const carried = RIT.objectCarriedBy(ritual, h.id);
-    if (carried && !hunting) {
-      if (Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE) RIT.depositCarried(ritual, h.id);
-    } else if (h.role === RIT.RROLE.FETCH) {
-      for (const o of ritual.objects) {
-        if (o.status !== RIT.OBJ.ON_MAP) continue;
-        const [owx, owz] = worldOf(o.gx, o.gz);
-        if (Math.hypot(h.pos.x - owx, h.pos.z - owz) <= 0.7) { RIT.pickup(ritual, o.id, h.id); break; }
+    if (ritual.phase === RIT.PHASE.MISSIONS) {
+      // REPAIR: si está sobre una misión incompleta, la trabaja; si no, camina hacia la meta.
+      let m = null;
+      for (const mi of ritual.missions) {
+        if (mi.done) continue;
+        const [mwx, mwz] = worldOf(mi.gx, mi.gz);
+        if (Math.hypot(h.pos.x - mwx, h.pos.z - mwz) <= 1.0) { m = mi; break; }
       }
+      if (m) { h.working = 0; RIT.workMission(ritual, m.id, dt, REPAIR_RATE * (h.shaken > 0 ? SHAKEN_SLOW : 1)); }
+      else if (h.goal) stepToward(h, h.goal, HUNTER_SPEED * speedMul, dt);
+    } else {
+      // GATHER: recoger/depositar cruces (R2) — bloque existente sin cambios.
+      const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
+      const carried = RIT.objectCarriedBy(ritual, h.id);
+      if (carried && !hunting) {
+        if (Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE) RIT.depositCarried(ritual, h.id);
+      } else if (h.role === RIT.RROLE.FETCH) {
+        for (const o of ritual.objects) {
+          if (o.status !== RIT.OBJ.ON_MAP) continue;
+          const [owx, owz] = worldOf(o.gx, o.gz);
+          if (Math.hypot(h.pos.x - owx, h.pos.z - owz) <= 0.7) { RIT.pickup(ritual, o.id, h.id); break; }
+        }
+      }
+      if (h.goal) stepToward(h, h.goal, HUNTER_SPEED * speedMul, dt);
     }
-    if (h.goal) stepToward(h, h.goal, HUNTER_SPEED * speedMul, dt);
     pushRecent(h);
   }
   const dx = h.pos.x - prevX, dz = h.pos.z - prevZ;
@@ -754,6 +766,11 @@ function buildCandidates(h) {
     case RIT.RROLE.DISTRACT: {
       const [ggx, ggz] = cellOf(pos.x, pos.z);
       cands = [{ gx: ggx, gz: ggz, bias: 3 }];
+      break;
+    }
+    case RIT.RROLE.REPAIR: {
+      const inc = ritual.missions.filter((m) => !m.done).map((m) => ({ gx: m.gx, gz: m.gz, bias: 4 }));
+      cands = inc.length ? inc : [{ gx: ritual.altar.gx, gz: ritual.altar.gz, bias: 1 }];
       break;
     }
     default:
