@@ -3,7 +3,7 @@
 Mini-juego web de terror asimétrico en **primera persona** para la *Didáctico Jam 2026* (tema: **AL REVÉS**).
 Juegas como **fantasma** con los **controles de movimiento invertidos** y la **vista en negativo**, sobreviviendo a cazadores controlados por IA.
 
-> **Estado:** R4 — Parry (norte completo): en cacería, cada superviviente puede bloquear tu kill una vez (probabilidad por pericia); un parry exitoso te aturde 3s (sin kill/habilidades, lento) y lo deja huir. Contrajuego: re-atacar a quien ya paró.
+> **Estado:** R5 — misiones: los 8 supervivientes reparan monitores (siempre ocupados); al completarlos todos se desbloquea el ritual (gather → channel → ganar). El rugido acosa (cordura↓ + ralentiza) en vez de dispersar.
 
 ## El tema "AL REVÉS": inversión como evento (no constante)
 
