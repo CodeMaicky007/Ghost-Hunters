@@ -28,7 +28,7 @@
          Cada cierto tiempo <strong>RUGES</strong> → empieza la <strong>CACERÍA</strong>: las luces mueren,
          ellos quedan ciegos y <strong>tú ves en la oscuridad</strong>. Ahí <strong>puedes matarlos</strong>.</p>
       <button id="startBtn" disabled>CARGANDO…</button>
-      <p class="hint">Mover: WASD · Mirar: ratón · [1] Rugido · [2] Teletransporte · [3] Trampa · [4] Aparición · [5] Espectral (caza) · [Espacio] Cacería (barra llena) · [Esc] salir</p>
+      <p class="hint">Mover: WASD · Mirar: ratón · [1]/clic Observar (100% = MARCADO: muere de 1 golpe) · [2] Teletransporte · [3] Trampa · [4] Aparición · [5] Espectral (caza) · [Espacio] Cacería · [E] Mori sobre un KO · [Esc] salir</p>
     </div>
   </div>
 
@@ -37,6 +37,8 @@
     <div id="crosshair"></div>
     <div id="glitchBanner" class="hidden"></div>
     <div id="stunfx" class="hidden">ATURDIDO</div>
+    <div id="morifx" class="hidden">EJECUTANDO…</div>
+    <div id="moriTip" class="hidden">[E] MEMENTO MORI</div>
     <div id="topbar">
       <div class="stat">⏱ <b id="matchTime">3:00</b></div>
       <div class="stat">📺 Monitores <b id="missions">0/4</b></div>
@@ -50,7 +52,7 @@
     <!-- Barra de habilidades -->
     <div id="energyWrap"><div id="energyBar"></div><span id="energyLabel">ENERGÍA</span></div>
     <div id="abilities">
-      <div class="abil" id="ab1"><span class="k">1</span><span class="n">Rugido</span><span class="cd" id="cd1">LISTO</span></div>
+      <div class="abil" id="ab1"><span class="k">1</span><span class="n">Observación</span><span class="cd" id="cd1">APUNTA+1</span></div>
       <div class="abil" id="ab2"><span class="k">2</span><span class="n">Teletransporte</span><span class="cd" id="cd2">LISTO</span></div>
       <div class="abil" id="ab3"><span class="k">3</span><span class="n">Trampa</span><span class="cd" id="cd3">LISTO</span></div>
       <div class="abil" id="ab4"><span class="k">4</span><span class="n">Aparición</span><span class="cd" id="cd4">LISTO</span></div>

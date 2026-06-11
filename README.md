@@ -3,7 +3,7 @@
 Mini-juego web de terror asimétrico en **primera persona** para la *Didáctico Jam 2026* (tema: **AL REVÉS**).
 Juegas como **fantasma** con los **controles de movimiento invertidos** y la **vista en negativo**, sobreviviendo a cazadores controlados por IA.
 
-> **Estado:** R5 — misiones: los 8 supervivientes reparan monitores (siempre ocupados); al completarlos todos se desbloquea el ritual (gather → channel → ganar). El rugido acosa (cordura↓ + ralentiza) en vez de dispersar.
+> **Estado:** R6 — observación/marcado + derribo: marca observando (100% = kill de 1 golpe en cacería); sin marca, 2 golpes → KO → los compañeros reaniman si no estás cerca, o lo ejecutas con E (Memento Mori). Rutinas complementarias (reparadores + vigía + rescatador). Los que huyen ya nunca corren hacia ti.
 
 ## El tema "AL REVÉS": inversión como evento (no constante)
 
@@ -33,12 +33,13 @@ Luego abre <http://localhost:8080> y haz click en **JUGAR**.
 |---|---|
 | Ratón | Mirar |
 | W A S D | Mover |
-| `1` / clic | Rugido (susto; revela al más lejano) |
+| `1` / clic | Observar al apuntado (al 100% queda MARCADO: muere de 1 golpe en cacería) |
 | `2` | Teletransporte (a donde miras) |
 | `3` | Trampa paranormal (en tu celda) |
 | `4` | Aparición (señuelo donde miras) |
 | `5` | Visión espectral (solo en cacería) |
 | `Espacio` | Cacería (si la barra de energía está llena) |
+| `E` | Memento Mori sobre un superviviente derribado |
 | `O` | Overlay de depuración de la IA |
 
 ## Tecnología

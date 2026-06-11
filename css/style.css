@@ -140,3 +140,7 @@ body { font-family: "Segoe UI", system-ui, sans-serif; color: #fff; cursor: defa
 #stunfx { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; font: 700 28px/1 monospace; letter-spacing: 4px; color: #ffd0d0; text-shadow: 0 0 12px #ff3b3b; box-shadow: inset 0 0 220px 60px rgba(157,30,30,0.65); animation: stunpulse 0.5s ease-in-out infinite; }
 #stunfx.hidden { display: none; }
 @keyframes stunpulse { 0%,100% { opacity: 0.65; } 50% { opacity: 1; } }
+
+#moriTip { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); font: 700 14px monospace; color: #ffd0d0; text-shadow: 0 0 8px #ff3b3b; letter-spacing: 2px; }
+#moriTip.hidden, #morifx.hidden { display: none; }
+#morifx { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; font: 700 30px/1 monospace; letter-spacing: 6px; color: #fff; text-shadow: 0 0 16px #ff3b3b; box-shadow: inset 0 0 260px 80px rgba(120,0,10,0.8); animation: stunpulse 0.4s ease-in-out infinite; }

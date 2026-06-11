@@ -711,6 +711,8 @@ function updateHUD(hunting) {
   el('cd5').textContent = ab.cooldowns.spectral > 0 ? ab.cooldowns.spectral.toFixed(1) + 's' : (hunting ? 'LISTO' : 'CAZA');
   el('ab5').classList.toggle('dim', !hunting || ab.cooldowns.spectral > 0);
   el('stunfx').classList.toggle('hidden', stun <= 0);
+  el('morifx').classList.toggle('hidden', moriT <= 0);
+  el('moriTip').classList.toggle('hidden', moriT > 0 || !hunters.some((h) => h.alive && h.ko && Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= MORI_RANGE));
 }
 const mmCanvas = el('minimap'), mmCtx = mmCanvas.getContext('2d'), MM = mmCanvas.width;
 function buildMaze(map, wallColor) {
@@ -737,9 +739,10 @@ function drawMinimap() {
   }
   mmCtx.fillStyle = '#c77dff'; mmCtx.beginPath(); mmCtx.arc((pos.x / CELL) * cs, (pos.z / CELL) * cs, 3, 0, 7); mmCtx.fill();
   if (debugAI) {
-    const COLR = { REPAIR: '#00d4ff', EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', FETCH: '#ffd166', GUARD: '#ffae42', CHANNELER: '#c77dff', DEFEND: '#37d67a', DISTRACT: '#ff3b3b' };
+    const COLR = { REPAIR: '#00d4ff', SCOUT: '#ffffff', RESCUER: '#ff8ce0', EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', FETCH: '#ffd166', GUARD: '#ffae42', CHANNELER: '#c77dff', DEFEND: '#37d67a', DISTRACT: '#ff3b3b' };
     for (const h of hunters) {
       if (!h.alive) continue;
+      if (h.ko) { mmCtx.fillStyle = '#888'; mmCtx.fillRect((h.pos.x / CELL) * cs - 2, (h.pos.z / CELL) * cs - 2, 4, 4); continue; }
       mmCtx.fillStyle = COLR[h.role] || '#fff';
       mmCtx.fillRect((h.pos.x / CELL) * cs - 2, (h.pos.z / CELL) * cs - 2, 4, 4);
       mmCtx.fillStyle = h.panic ? '#ff0000' : '#000';
