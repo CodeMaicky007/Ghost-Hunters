@@ -36,6 +36,11 @@ const MATCH_TIME = 180;
 const NUM_HUNTERS = 8;
 const NUM_RITUAL_OBJECTS = 4;
 const RITUAL_SPREAD = 18;   // radio (celdas) de la región donde caen altar+objetos
+const NUM_MISSIONS = 6;
+const REPAIR_RATE = 0.12;   // progreso/seg de una misión (~8s con un bot)
+const SHAKEN_DUR = 4;       // s que dura el "aturdimiento" por rugido
+const SHAKEN_SLOW = 0.4;    // multiplicador de tarea/movimiento mientras shaken
+const MISSION_HEIGHT = 0.95; // alto objetivo del monitor
 const HUNTER_SPEED = 2.8;
 const HUNTER_FLEE_SPEED = 3.6;
 
@@ -204,6 +209,7 @@ const sfx = {
 // ============================================================
 let ritual = null;                 // estado puro (js/ritual.js), creado en makeRitual
 const ritualMeshes = new Map();    // objId -> THREE.Object3D
+const missionMeshes = new Map(); // missionId -> { mesh, mat }
 let altarMesh = null, altarMat = null;
 const OBJ_HEIGHT = 0.6;            // alto objetivo del objeto ritual en mundo
 const ALTAR_HEIGHT = 0.9;         // alto objetivo del altar
@@ -231,10 +237,11 @@ function makeRitual(assets) {
   // para encontrar la zona, pero el transporte es razonable. RITUAL_SPREAD tunea
   // cuánto se dispersan dentro de la región.
   const hub = REACH.list[Math.floor(Math.random() * REACH.list.length)];
-  const cells = spreadCells(NUM_RITUAL_OBJECTS + 1, (x, z) => (Math.abs(x - hub[0]) + Math.abs(z - hub[1])) > RITUAL_SPREAD);
+  const cells = spreadCells(NUM_MISSIONS + NUM_RITUAL_OBJECTS + 1, (x, z) => (Math.abs(x - hub[0]) + Math.abs(z - hub[1])) > RITUAL_SPREAD);
   const [agx, agz] = cells[0], [awx, awz] = worldOf(agx, agz);
-  const objCells = cells.slice(1, NUM_RITUAL_OBJECTS + 1);
-  ritual = RIT.createRitual(objCells, [agx, agz], { NEED_CHANNELERS: 2 });
+  const missionCells = cells.slice(1, 1 + NUM_MISSIONS);
+  const objCells = cells.slice(1 + NUM_MISSIONS, 1 + NUM_MISSIONS + NUM_RITUAL_OBJECTS);
+  ritual = RIT.createRitual(missionCells, objCells, [agx, agz], { NEED_CHANNELERS: 2 });
 
   // Altar (mesa) con material propio para el brillo de canalización.
   if (assets && assets.altar) {
@@ -256,6 +263,22 @@ function makeRitual(assets) {
     else { mesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, OBJ_HEIGHT, 0.3), new THREE.MeshStandardMaterial({ color: 0xd8c089, emissive: 0x7a5a20, emissiveIntensity: 0.4 })); mesh.position.set(wx, OBJ_HEIGHT / 2, wz); }
     scene.add(mesh);
     ritualMeshes.set(o.id, mesh);
+  }
+
+  // Estaciones de misión = monitores (reusa el TV GLB; respaldo caja).
+  for (const m of ritual.missions) {
+    const [wx, wz] = worldOf(m.gx, m.gz);
+    let mesh, mat;
+    if (assets && assets.tv) {
+      mesh = placeProp(assets.tv, wx, wz, MISSION_HEIGHT, true);
+      mesh.traverse((o) => { if (o.isMesh && !mat) mat = (Array.isArray(o.material) ? o.material[0] : o.material).clone(); });
+      mesh.traverse((o) => { if (o.isMesh) o.material = mat; });
+    } else {
+      mat = new THREE.MeshStandardMaterial({ color: 0x222633, emissive: 0xff3333, emissiveIntensity: 0.6 });
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, MISSION_HEIGHT, 0.5), mat); mesh.position.set(wx, MISSION_HEIGHT / 2, wz);
+    }
+    if (mat) { mat.emissive = new THREE.Color(0xff3333); mat.emissiveIntensity = 0.6; }
+    scene.add(mesh); missionMeshes.set(m.id, { mesh, mat });
   }
 }
 
@@ -279,6 +302,12 @@ function syncRitualMeshes() {
   }
   // Brillo del altar crece con la canalización.
   if (altarMat) altarMat.emissiveIntensity = 0.1 + (ritual.phase === RIT.PHASE.CHANNEL ? 1.2 * ritual.channel : 0);
+  // Monitores: rojo (averiado) -> verde (reparado) según progreso.
+  for (const m of ritual.missions) {
+    const mm = missionMeshes.get(m.id); if (!mm || !mm.mat) continue;
+    mm.mat.emissive.setRGB(1 - m.progress, 0.2 + 0.7 * m.progress, 0.2);
+    mm.mat.emissiveIntensity = 0.5 + 0.4 * m.progress;
+  }
 }
 
 // ============================================================
