@@ -205,15 +205,15 @@ test('workMission no hace nada fuera de fase MISSIONS', () => {
   assert.equal(workMission(r, 0, 10, 1), false);
 });
 
-test('assignRitualRoles en MISSIONS: todos los vivos a REPAIR', () => {
+test('assignRitualRoles en MISSIONS: 1 SCOUT (más valiente) + resto REPAIR; muertos sin rol', () => {
   const r = createRitual([[1, 1]], [[2, 2]], [0, 0]); // MISSIONS
   const agents = [
-    { id: 0, alive: true, bravery: 0.5, gx: 0, gz: 0 },
-    { id: 1, alive: false, bravery: 0.8, gx: 1, gz: 1 },
-    { id: 2, alive: true, bravery: 0.2, gx: 2, gz: 2 },
+    { id: 0, alive: true, ko: false, bravery: 0.5, gx: 0, gz: 0 },
+    { id: 1, alive: false, ko: false, bravery: 0.8, gx: 1, gz: 1 },
+    { id: 2, alive: true, ko: false, bravery: 0.2, gx: 2, gz: 2 },
   ];
   const roles = assignRitualRoles(agents, r, 0);
-  assert.equal(roles.get(0), RROLE.REPAIR);
+  assert.equal(roles.get(0), RROLE.SCOUT);  // el más valiente de los vivos vigila
   assert.equal(roles.get(2), RROLE.REPAIR);
   assert.equal(roles.has(1), false); // muerto, sin rol
 });
@@ -221,4 +221,25 @@ test('assignRitualRoles en MISSIONS: todos los vivos a REPAIR', () => {
 test('allMissionsDone con cero misiones devuelve false (no auto-gatea)', () => {
   const r = createRitual([], [[1, 1]], [0, 0]);
   assert.equal(allMissionsDone(r), false);
+});
+
+test('MISSIONS: 1 SCOUT (el más valiente) + resto REPAIR', () => {
+  const r = createRitual([[1, 1], [2, 2]], [[5, 5]], [0, 0]);
+  const agents = [0, 1, 2, 3].map((i) => ({ id: i, alive: true, ko: false, bravery: i / 3, gx: i, gz: 0 }));
+  const roles = assignRitualRoles(agents, r, 0);
+  assert.equal(roles.get(3), RROLE.SCOUT);          // el más valiente
+  assert.equal(roles.get(0), RROLE.REPAIR);
+  assert.equal(roles.get(1), RROLE.REPAIR);
+});
+
+test('override RESCUER: con un KO, el activo más cercano acude (en cualquier fase)', () => {
+  const r = createRitual([[1, 1]], [[5, 5]], [0, 0]); // MISSIONS
+  const agents = [
+    { id: 0, alive: true, ko: false, bravery: 0.9, gx: 9, gz: 0 },
+    { id: 1, alive: true, ko: true, bravery: 0.5, gx: 5, gz: 5 },
+    { id: 2, alive: true, ko: false, bravery: 0.1, gx: 5, gz: 4 },
+  ];
+  const roles = assignRitualRoles(agents, r, 0, { koIds: [1] });
+  assert.equal(roles.get(2), RROLE.RESCUER);
+  assert.equal(roles.has(1), false);                // el KO no recibe rol
 });

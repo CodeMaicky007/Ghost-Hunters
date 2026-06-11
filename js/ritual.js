@@ -16,7 +16,7 @@ export const OBJ = { ON_MAP: 'ON_MAP', CARRIED: 'CARRIED', DEPOSITED: 'DEPOSITED
 export const PHASE = { MISSIONS: 'MISSIONS', GATHER: 'GATHER', CHANNEL: 'CHANNEL', DONE: 'DONE' };
 // Roles de fase: reutiliza los de R1 + añade los específicos de la ruta de victoria.
 // (CHANNELER != PHASE.CHANNEL: el rol del canalizador usa otra cadena para no colisionar con la fase.)
-export const RROLE = { ...ROLES, REPAIR: 'REPAIR', FETCH: 'FETCH', CHANNELER: 'CHANNELER', DEFEND: 'DEFEND', DISTRACT: 'DISTRACT' };
+export const RROLE = { ...ROLES, REPAIR: 'REPAIR', SCOUT: 'SCOUT', RESCUER: 'RESCUER', FETCH: 'FETCH', CHANNELER: 'CHANNELER', DEFEND: 'DEFEND', DISTRACT: 'DISTRACT' };
 
 export function createRitual(missionCells, objectCells, altarCell, opts = {}) {
   const p = { ...RCFG, ...opts };
@@ -104,20 +104,21 @@ export function discoverableCells(ritual) {
   return cells;
 }
 
-// Reparte roles según la fase. agents: [{id, alive, bravery, gx, gz}]. threat 0..1.
+// Reparte roles según la fase. agents: [{id, alive, ko, bravery, gx, gz}]. threat 0..1.
+// MISSIONS: 1 SCOUT (el más valiente, patrulla/alerta) + resto REPAIR.
 // GATHER: 4 FETCH (los más valientes) + EXPLORE_A/B; el portador siempre FETCH.
 // CHANNEL: needChannelers CHANNELER (más cercanos al altar), resto DEFEND, y 1-2
 // DISTRACT (los más valientes) salvo amenaza alta.
-export function assignRitualRoles(agents, ritual, threat) {
+// Override por necesidad (cualquier fase): por cada KO de ctx.koIds, el activo
+// más cercano (no RESCUER/CHANNELER) pasa a RESCUER. Los KO no reciben rol.
+export function assignRitualRoles(agents, ritual, threat, ctx = {}) {
   const out = new Map();
-  const alive = agents.filter((a) => a.alive);
+  const alive = agents.filter((a) => a.alive && !a.ko);
 
   if (ritual.phase === PHASE.MISSIONS) {
-    for (const a of alive) out.set(a.id, RROLE.REPAIR);
-    return out;
-  }
-
-  if (ritual.phase === PHASE.CHANNEL) {
+    const byBrave = alive.slice().sort((a, b) => b.bravery - a.bravery);
+    byBrave.forEach((a, i) => out.set(a.id, i === 0 && byBrave.length > 1 ? RROLE.SCOUT : RROLE.REPAIR));
+  } else if (ritual.phase === PHASE.CHANNEL) {
     const dA = (a) => Math.abs(a.gx - ritual.altar.gx) + Math.abs(a.gz - ritual.altar.gz);
     const byNear = alive.slice().sort((x, y) => dA(x) - dA(y));
     const need = Math.min(ritual.needChannelers, byNear.length);
@@ -125,14 +126,26 @@ export function assignRitualRoles(agents, ritual, threat) {
     const rest = byNear.slice(need).sort((x, y) => y.bravery - x.bravery);
     const nDistract = threat >= 1 ? 0 : (rest.length >= 3 ? 2 : (rest.length >= 1 ? 1 : 0));
     for (let i = 0; i < nDistract; i++) out.set(rest[i].id, RROLE.DISTRACT);
-    return out;
+  } else {
+    // GATHER
+    const sorted = alive.slice().sort((a, b) => b.bravery - a.bravery);
+    const order = [RROLE.FETCH, RROLE.FETCH, RROLE.EXPLORE_A, RROLE.EXPLORE_B];
+    const n = sorted.length || 1;
+    sorted.forEach((a, i) => out.set(a.id, order[Math.min(3, Math.floor((i * 4) / n))]));
+    for (const a of alive) if (objectCarriedBy(ritual, a.id)) out.set(a.id, RROLE.FETCH);
   }
 
-  // GATHER
-  const sorted = alive.slice().sort((a, b) => b.bravery - a.bravery);
-  const order = [RROLE.FETCH, RROLE.FETCH, RROLE.EXPLORE_A, RROLE.EXPLORE_B];
-  const n = sorted.length || 1;
-  sorted.forEach((a, i) => out.set(a.id, order[Math.min(3, Math.floor((i * 4) / n))]));
-  for (const a of alive) if (objectCarriedBy(ritual, a.id)) out.set(a.id, RROLE.FETCH);
+  // Override por necesidad: alguien KO -> el activo más cercano acude a reanimar.
+  const kos = (ctx.koIds || []).map((id) => agents.find((a) => a.id === id)).filter(Boolean);
+  for (const k of kos) {
+    let best = null, bd = Infinity;
+    for (const a of alive) {
+      const r0 = out.get(a.id);
+      if (r0 === RROLE.RESCUER || r0 === RROLE.CHANNELER) continue;
+      const d = Math.abs(a.gx - k.gx) + Math.abs(a.gz - k.gz);
+      if (d < bd) { bd = d; best = a; }
+    }
+    if (best) out.set(best.id, RROLE.RESCUER);
+  }
   return out;
 }
