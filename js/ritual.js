@@ -69,6 +69,25 @@ export function depositCarried(ritual, agentId) {
   return true;
 }
 
+export function missionsDoneCount(ritual) {
+  return ritual.missions.filter((m) => m.done).length;
+}
+export function allMissionsDone(ritual) {
+  return ritual.missions.length > 0 && missionsDoneCount(ritual) === ritual.missions.length;
+}
+
+// Avanza una misión en fase MISSIONS. Al completar TODAS -> phase = GATHER
+// (se desbloquea el ritual). Devuelve si la misión quedó hecha.
+export function workMission(ritual, id, dt, rate) {
+  if (ritual.phase !== PHASE.MISSIONS) return false;
+  const m = ritual.missions.find((x) => x.id === id);
+  if (!m || m.done) return false;
+  m.progress = Math.min(1, m.progress + dt * rate);
+  if (m.progress >= 1) m.done = true;
+  if (allMissionsDone(ritual)) ritual.phase = PHASE.GATHER;
+  return m.done;
+}
+
 // Avanza la canalización en fase CHANNEL. interrupt -> retrocede; si no, sube
 // con >= needChannelers. Devuelve la fase resultante.
 export function channelTick(ritual, nChannelers, dt, { interrupt = false } = {}) {

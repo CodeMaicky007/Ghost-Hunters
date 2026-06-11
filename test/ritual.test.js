@@ -5,6 +5,7 @@ import {
   pickup, objectCarriedBy, dropCarried,
   depositCarried, depositedCount, allDeposited,
   channelTick, discoverableCells, assignRitualRoles,
+  workMission, missionsDoneCount, allMissionsDone,
 } from '../js/ritual.js';
 
 test('createRitual inicializa objetos ON_MAP y fase GATHER', () => {
@@ -178,4 +179,28 @@ test('createRitual con misiones empieza en MISSIONS; sin misiones, en GATHER', (
   const sinM = createRitual([], [[2, 2]], [0, 0]);
   assert.equal(sinM.phase, PHASE.GATHER);
   assert.equal(sinM.missions.length, 0);
+});
+
+test('workMission sube progreso, clampa y marca done', () => {
+  const r = createRitual([[1, 1], [2, 2]], [[5, 5]], [0, 0]);
+  assert.equal(workMission(r, 0, 2, 0.2), false); // 2*0.2=0.4 < 1
+  assert.ok(Math.abs(r.missions[0].progress - 0.4) < 1e-9);
+  assert.equal(workMission(r, 0, 10, 0.2), true); // pasa de 1 -> clamp + done
+  assert.equal(r.missions[0].progress, 1);
+  assert.equal(r.missions[0].done, true);
+  assert.equal(missionsDoneCount(r), 1);
+});
+
+test('al completar TODAS las misiones se pasa a fase GATHER', () => {
+  const r = createRitual([[1, 1], [2, 2]], [[5, 5]], [0, 0]);
+  workMission(r, 0, 10, 1);
+  assert.equal(r.phase, PHASE.MISSIONS); // aún queda la 1
+  workMission(r, 1, 10, 1);
+  assert.equal(allMissionsDone(r), true);
+  assert.equal(r.phase, PHASE.GATHER);
+});
+
+test('workMission no hace nada fuera de fase MISSIONS', () => {
+  const r = createRitual([], [[1, 1]], [0, 0]); // GATHER
+  assert.equal(workMission(r, 0, 10, 1), false);
 });
