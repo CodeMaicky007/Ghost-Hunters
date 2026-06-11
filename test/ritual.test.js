@@ -217,3 +217,8 @@ test('assignRitualRoles en MISSIONS: todos los vivos a REPAIR', () => {
   assert.equal(roles.get(2), RROLE.REPAIR);
   assert.equal(roles.has(1), false); // muerto, sin rol
 });
+
+test('allMissionsDone con cero misiones devuelve false (no auto-gatea)', () => {
+  const r = createRitual([], [[1, 1]], [0, 0]);
+  assert.equal(allMissionsDone(r), false);
+});

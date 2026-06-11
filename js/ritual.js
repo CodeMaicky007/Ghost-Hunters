@@ -57,7 +57,7 @@ export function depositedCount(ritual) {
   return ritual.objects.filter((o) => o.status === OBJ.DEPOSITED).length;
 }
 export function allDeposited(ritual) {
-  return depositedCount(ritual) === ritual.objects.length;
+  return depositedCount(ritual) === ritual.objects.length; // (siempre hay objetos; cf. allMissionsDone, que sí exige length>0)
 }
 
 export function depositCarried(ritual, agentId) {
@@ -82,9 +82,8 @@ export function workMission(ritual, id, dt, rate) {
   if (ritual.phase !== PHASE.MISSIONS) return false;
   const m = ritual.missions.find((x) => x.id === id);
   if (!m || m.done) return false;
-  m.progress = Math.min(1, m.progress + dt * rate);
-  if (m.progress >= 1) m.done = true;
-  if (allMissionsDone(ritual)) ritual.phase = PHASE.GATHER;
+  m.progress = Math.min(1, Math.max(0, m.progress + dt * rate)); // clamp 0..1 (defensivo ante rate<0)
+  if (m.progress >= 1) { m.done = true; if (allMissionsDone(ritual)) ritual.phase = PHASE.GATHER; } // el gate solo en el evento de completar
   return m.done;
 }
 
