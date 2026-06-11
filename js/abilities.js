@@ -9,17 +9,17 @@ export const AB = {
   COST_TELEPORT: 0.25,
   COST_TRAP: 0.3,
   COST_DECOY: 0.3,
-  CD_TELEPORT: 6,        // s
-  CD_TRAP: 8,
-  CD_DECOY: 10,
-  CD_SPECTRAL: 10,
+  CD_TELEPORT: 12,       // s (doblado tras playtest)
+  CD_TRAP: 16,
+  CD_DECOY: 20,
+  CD_SPECTRAL: 20,
   TRAP_DUR: 12,          // s que dura una trampa
   TRAP_RADIUS: 2,        // celdas (Manhattan)
   DECOY_DUR: 8,          // s que dura el señuelo
   SPECTRAL_DUR: 6,       // s de visión espectral
   HUNT_DUR: 45,          // s de cacería activada
   HUNT_SPEED_MULT: 1.3,  // multiplicador de velocidad del fantasma en cacería
-  SENSE_RANGE: 7,        // unidades de mundo: rango de "sonido" que sienten
+  SENSE_RANGE: 10,       // unidades de mundo: rango de "sonido"/sentido (suben al detectarte y se alejan)
   TELEPORT_RANGE: 12,    // celdas máx de teletransporte
 };
 

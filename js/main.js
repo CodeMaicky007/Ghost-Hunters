@@ -373,7 +373,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   // Sentido del fantasma (invisible): cuanto más cerca, más se alejan. Nunca van hacia él.
   if (!hunting) {
     const dG = Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z);
-    if (dG < SENSE_RANGE_W) { const prox = 1 - dG / SENSE_RANGE_W; h.flee = Math.max(h.flee, 0.3 + prox * 1.2); h.next = null; }
+    if (dG < SENSE_RANGE_W) { const prox = 1 - dG / SENSE_RANGE_W; h.flee = Math.max(h.flee, 0.8 + prox * 1.6); h.next = null; }
   }
   const prevX = h.pos.x, prevZ = h.pos.z;
   if (hunting) {

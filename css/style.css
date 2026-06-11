@@ -138,4 +138,5 @@ body { font-family: "Segoe UI", system-ui, sans-serif; color: #fff; cursor: defa
 .abil.dim { opacity: 0.4; }
 
 #stunfx { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; font: 700 28px/1 monospace; letter-spacing: 4px; color: #ffd0d0; text-shadow: 0 0 12px #ff3b3b; box-shadow: inset 0 0 220px 60px rgba(157,30,30,0.65); animation: stunpulse 0.5s ease-in-out infinite; }
+#stunfx.hidden { display: none; }
 @keyframes stunpulse { 0%,100% { opacity: 0.65; } 50% { opacity: 1; } }

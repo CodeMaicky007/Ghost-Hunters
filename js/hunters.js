@@ -87,8 +87,9 @@ export class HunterModel {
     g.fillStyle = '#fff'; g.font = '22px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(text, 128, 32);
     const tex = new THREE.CanvasTexture(c);
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-    spr.scale.set(1.4, 0.35, 1); spr.position.set(0, 2.1, 0); spr.renderOrder = 1000;
+    // depthTest: true -> los muros ocultan la burbuja (no se ve el texto a través de paredes).
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
+    spr.scale.set(1.4, 0.35, 1); spr.position.set(0, 2.1, 0);
     this.root.add(spr); this._bubble = spr; this._bubbleT = dur;
   }
 
