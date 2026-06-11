@@ -22,6 +22,10 @@ base; algunos números (p. ej. **3 investigadores → 8 supervivientes**) y la c
 - **R4 — Sistema de Parry** (uno por cacería; probabilidad por pericia/valentía, penalizada por pánico;
   éxito = te aturde 3s y sobrevive, fallo = muerte; contrajuego = re-atacar a quien ya paró). Spec:
   [`superpowers/specs/2026-06-10-parry-design.md`](superpowers/specs/2026-06-10-parry-design.md).
+- **R5 — Sistema de misiones** (post-playtest): fase previa de tareas (reparar monitores) que mantiene a
+  los bots siempre ocupados y, al completarse todas, **desbloquea el ritual** (misiones → gather → channel →
+  ganar). El rugido pasa a **acosar** (cordura↓ + ralentiza) en vez de dispersar. Spec:
+  [`superpowers/specs/2026-06-10-misiones-design.md`](superpowers/specs/2026-06-10-misiones-design.md).
 
 ## Pitch
 Phasmophobia **al revés**, ambientado en los **Backrooms**. Eres **la entidad** (1ª persona).
