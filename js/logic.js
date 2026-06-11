@@ -102,3 +102,14 @@ export function analyzeEnvMeshes(boxes) {
   });
   return { shell, floor, ceiling, walls, floorY, ceilY, ceilHeight };
 }
+
+// Resultado de un golpe en cacería: marcado = muerte directa; sin marca, pierde
+// una vida y con la última cae derribado (KO), no muerto.
+export function hitResult(marked, lives) {
+  if (marked) return { outcome: 'dead', lives: 0 };
+  const left = lives - 1;
+  return left <= 0 ? { outcome: 'down', lives: 0 } : { outcome: 'wounded', lives: left };
+}
+
+// Reanimar a un KO solo es posible si el fantasma no está cerca.
+export function canRevive(distGhost, blockRange) { return distGhost >= blockRange; }

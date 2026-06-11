@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeEnvScale, classifyCell, hunterAnimState, pickAnim, pickDistinct, isSolidCell, collidesBoxGrid } from '../js/logic.js';
-import { parryChance, rollParry } from '../js/logic.js';
+import { parryChance, rollParry, hitResult, canRevive } from '../js/logic.js';
 
 test('computeEnvScale fits ceiling to target', () => {
   assert.ok(Math.abs(computeEnvScale(8.6, 2.7) - 0.31395) < 1e-4);
@@ -95,4 +95,15 @@ test('rollParry: éxito si rng() < chance', () => {
   assert.equal(rollParry(0.5, () => 0.4), true);
   assert.equal(rollParry(0.5, () => 0.6), false);
   assert.equal(rollParry(0, () => 0), false); // 0 < 0 es false
+});
+
+test('hitResult: marcado muere de 1 golpe; sin marca 2 vidas -> herido -> KO', () => {
+  assert.deepEqual(hitResult(true, 2), { outcome: 'dead', lives: 0 });
+  assert.deepEqual(hitResult(false, 2), { outcome: 'wounded', lives: 1 });
+  assert.deepEqual(hitResult(false, 1), { outcome: 'down', lives: 0 });
+});
+
+test('canRevive: solo si el fantasma esta lejos', () => {
+  assert.equal(canRevive(10, 9), true);
+  assert.equal(canRevive(5, 9), false);
 });
