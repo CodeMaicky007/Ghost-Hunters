@@ -345,7 +345,7 @@ function makeHunters(chars) {
       flee: 0, repath: 0, next: null, working: -1,
       // --- estado IA ---
       bravery: 0.2 + Math.random() * 0.7,   // personalidad fija
-      stress: 0, sanity: 1, fear: 0, panic: false, parryUsed: false,
+      stress: 0, sanity: 1, fear: 0, panic: false, parryUsed: false, shaken: 0,
       role: AIB.ROLES.EXPLORE_A, recentCells: [], lastBarkT: -999, goal: null,
     });
   }
@@ -538,9 +538,9 @@ function roar() {
   for (const h of hunters) {
     if (!h.alive) continue;
     if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= SCARE_RANGE) {
-      h.flee = SCARE_FLEE; h.next = null;
-      const [gx, gz] = cellOf(h.pos.x, h.pos.z);
-      RIT.dropCarried(ritual, h.id, gx, gz); // si carga algo, lo suelta aquí
+      h.shaken = SHAKEN_DUR;                       // no huyen: se desestabilizan
+      h.stress = Math.min(1, h.stress + 0.25);
+      h.sanity = Math.max(0, h.sanity - 0.15);
     }
   }
 }
