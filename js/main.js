@@ -200,6 +200,7 @@ const sfx = {
   roar() { tone({ type: 'sawtooth', f0: 72, f1: 40, dur: 1.3, vol: 0.55 }); tone({ type: 'square', f0: 98, f1: 52, dur: 1.3, vol: 0.3 }); },
   kill() { tone({ type: 'sine', f0: 170, f1: 38, dur: 0.45, vol: 0.45 }); },
   parry() { tone({ type: 'square', f0: 880, f1: 440, dur: 0.18, vol: 0.4 }); tone({ type: 'sine', f0: 1320, f1: 660, dur: 0.25, vol: 0.25 }); },
+  mori() { tone({ type: 'sawtooth', f0: 60, f1: 24, dur: 1.9, vol: 0.5 }); tone({ type: 'sine', f0: 240, f1: 30, dur: 1.9, vol: 0.3 }); },
   win() { tone({ type: 'triangle', f0: 440, f1: 880, dur: 0.5, vol: 0.4 }); },
   lose() { tone({ type: 'sawtooth', f0: 300, f1: 70, dur: 0.85, vol: 0.4 }); },
 };
@@ -356,6 +357,43 @@ function makeHunters(chars) {
   }
 }
 function farthestCell(x, z) { let best = null, bd = -1; for (const [gx, gz] of REACH.list) { const [wx, wz] = worldOf(gx, gz); const d = (wx - x) ** 2 + (wz - z) ** 2; if (d > bd) { bd = d; best = [gx, gz]; } } return best; }
+// Celda de huida: candidatas en anillo alrededor del bot, probando primero la
+// dirección opuesta al fantasma; vale la primera alcanzable cuyo PRIMER paso BFS
+// no acerque al fantasma (evita rutas que pasan por delante de él). Presupuesto
+// de BFS acotado; fallback: la celda más lejana global.
+function fleeCell(h, ghost) {
+  const [hgx, hgz] = cellOf(h.pos.x, h.pos.z);
+  const [ggx, ggz] = cellOf(ghost.x, ghost.z);
+  const away = Math.atan2(hgz - ggz, hgx - ggx); // dirección de escape
+  const tries = [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, Math.PI];
+  let bfsBudget = 4;
+  for (const off of tries) {
+    const ang = away + off;
+    const gx = Math.round(hgx + Math.cos(ang) * FLEE_RADIUS), gz = Math.round(hgz + Math.sin(ang) * FLEE_RADIUS);
+    if (isWall(gx, gz) || !REACH.set.has(key(gx, gz))) continue;
+    if (bfsBudget-- <= 0) break;
+    const step = bfsNext(hgx, hgz, gx, gz);
+    if (!step) continue;
+    const d0 = Math.abs(hgx - ggx) + Math.abs(hgz - ggz);
+    const d1 = Math.abs(step[0] - ggx) + Math.abs(step[1] - ggz);
+    if (d1 >= d0) return [gx, gz]; // el primer paso ya se aleja: válida
+  }
+  return farthestCell(ghost.x, ghost.z);
+}
+
+// Cachea el destino de huida por bot (recalcula cada ~0.5 s). Si hay un destino
+// preferido (p.ej. celda de dispersión), se usa solo si su primer paso se aleja.
+function fleeTargetOf(h, ghost, dt, preferred) {
+  if (preferred) {
+    const [hgx, hgz] = cellOf(h.pos.x, h.pos.z); const [ggx, ggz] = cellOf(ghost.x, ghost.z);
+    const step = bfsNext(hgx, hgz, preferred[0], preferred[1]);
+    if (step && (Math.abs(step[0] - ggx) + Math.abs(step[1] - ggz)) >= (Math.abs(hgx - ggx) + Math.abs(hgz - ggz))) return preferred;
+  }
+  h.fleeRepath = (h.fleeRepath || 0) - dt;
+  if (!h.fleeTarget || h.fleeRepath <= 0) { h.fleeTarget = fleeCell(h, ghost); h.fleeRepath = 0.5; }
+  return h.fleeTarget;
+}
+
 function stepToward(ent, goal, speed, dt) {
   if (!goal) return;
   const [cgx, cgz] = cellOf(ent.pos.x, ent.pos.z);
@@ -425,7 +463,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   if (hunting) {
     h.working = -1;
     const dest = DISPERSAL && DISPERSAL.get(h.id);
-    stepToward(h, dest || farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
+    stepToward(h, fleeTargetOf(h, ghost, dt, dest), HUNTER_FLEE_SPEED * speedMul, dt);
     if (ghostOnFloor0 && stun <= 0 && h.hitCd <= 0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) {
       if (!h.parryUsed) {
         h.parryUsed = true; // un parry por cacería: gastado tanto si acierta como si falla
@@ -445,11 +483,11 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
       return;
     }
   } else if (h.flee > 0) {
-    h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
+    h.working = -1; stepToward(h, fleeTargetOf(h, ghost, dt), HUNTER_FLEE_SPEED * speedMul, dt);
   } else if (h.panic) {
     // PÁNICO: no progresa objetivos; huye lejos del fantasma de forma errática.
     h.working = -1;
-    const away = farthestCell(ghost.x, ghost.z);
+    const away = fleeTargetOf(h, ghost, dt);
     const jitter = [away[0] + (Math.random() < 0.5 ? 1 : -1), away[1] + (Math.random() < 0.5 ? 1 : -1)];
     stepToward(h, isOpenCell(jitter[0], jitter[1]) ? jitter : away, HUNTER_FLEE_SPEED * speedMul, dt);
     pushRecent(h);
@@ -590,6 +628,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'Digit4') useDecoy();
   else if (e.code === 'Digit5') useSpectral();
   else if (e.code === 'Space') tryStartHunt();
+  else if (e.code === 'KeyE') tryMori();
   else if (e.code === 'KeyO') debugAI = !debugAI;
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -726,6 +765,7 @@ function applyAtmosphere() {
   const fogc = 0x1c1808; scene.fog.color.setHex(fogc); scene.background.setHex(fogc);
 }
 function moveGhost(dt) {
+  if (moriT > 0) return; // clavado durante la ejecución
   const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
   const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
   const move = new THREE.Vector3();
@@ -879,7 +919,7 @@ function spawnTrapMesh(gx, gz) {
 }
 
 function useTeleport() {
-  if (stun > 0) return;
+  if (stun > 0 || moriT > 0) return;
   if (!ABL.canActivate(ab, ABL.KEY.TELEPORT)) return;
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
   const [cgx, cgz] = cellOf(pos.x, pos.z);
@@ -890,19 +930,28 @@ function useTeleport() {
   tone({ type: 'sine', f0: 600, f1: 120, dur: 0.35, vol: 0.4 });
 }
 function useTrap() {
-  if (stun > 0) return;
+  if (stun > 0 || moriT > 0) return;
   const [gx, gz] = cellOf(pos.x, pos.z);
   if (ABL.activate(ab, ABL.KEY.TRAP, [gx, gz])) { AIB.addEvent(BB, 'trap', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); spawnTrapMesh(gx, gz); }
 }
 function useDecoy() {
-  if (stun > 0) return;
+  if (stun > 0 || moriT > 0) return;
   const [gx, gz] = aimCell(ABL.AB.TELEPORT_RANGE);
   const [cgx, cgz] = cellOf(pos.x, pos.z);
   if (gx === cgx && gz === cgz) return; // sin sitio a la vista donde proyectar el señuelo
   if (ABL.activate(ab, ABL.KEY.DECOY, [gx, gz])) { AIB.addEvent(BB, 'apparition', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); tone({ type: 'triangle', f0: 320, f1: 180, dur: 0.6, vol: 0.35 }); }
 }
-function useSpectral() { if (stun > 0) return; ABL.activate(ab, ABL.KEY.SPECTRAL, null, { hunting: hunt.active > 0 }); }
-function tryStartHunt() { if (stun > 0) return; if (hunt.active <= 0 && ABL.huntReady(ab)) { ABL.spendForHunt(ab); startHunt(); } }
+function useSpectral() { if (stun > 0 || moriT > 0) return; ABL.activate(ab, ABL.KEY.SPECTRAL, null, { hunting: hunt.active > 0 }); }
+function tryStartHunt() { if (stun > 0 || moriT > 0) return; if (hunt.active <= 0 && ABL.huntReady(ab)) { ABL.spendForHunt(ab); startHunt(); } }
+
+// Memento Mori: ejecucion de un KO a quemarropa (no parryable; te deja clavado ~2s).
+function tryMori() {
+  if (stun > 0 || moriT > 0) return;
+  for (const h of hunters) {
+    if (!h.alive || !h.ko) continue;
+    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= MORI_RANGE) { moriT = MORI_TIME; moriTarget = h; sfx.mori(); return; }
+  }
+}
 
 // Celda transitable a la que mira el fantasma: marcha hacia delante (yaw) hasta
 // `maxCells` o hasta toparse con muro; devuelve la última celda abierta.
@@ -927,6 +976,10 @@ function update(dt) {
   if (GAME.timeLeft <= 0 && !escalated) { escalated = true; GAME.timeLeft = 0; if (hunt.active <= 0) startHunt(); }
   NOW_SEC = performance.now() / 1000;   // reloj monótono muestreado 1× por frame
   if (stun > 0) stun = Math.max(0, stun - dt);
+  if (moriT > 0 && moriTarget) {   // ejecución en curso: cancela si el KO se va o te alejas
+    if (!moriTarget.ko || !moriTarget.alive || Math.hypot(moriTarget.pos.x - pos.x, moriTarget.pos.z - pos.z) > MORI_RANGE + 0.6) { moriT = 0; moriTarget = null; }
+    else { moriT -= dt; if (moriT <= 0) { moriTarget.ko = false; killHunter(moriTarget); moriTarget = null; moriT = 0; } }
+  }
   const hunting = updateHunt(dt);
   // Energía: gana con el tiempo + bonus si hay un superviviente cerca (acecho).
   let nearSurvivor = false;
