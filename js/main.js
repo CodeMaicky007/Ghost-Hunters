@@ -409,7 +409,17 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   // Sentido del fantasma (invisible): cuanto más cerca, más se alejan. Nunca van hacia él.
   if (!hunting) {
     const dG = Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z);
-    if (dG < SENSE_RANGE_W) { const prox = 1 - dG / SENSE_RANGE_W; h.flee = Math.max(h.flee, 0.8 + prox * 1.6); h.next = null; }
+    if (dG < SENSE_RANGE_W) {
+      const prox = 1 - dG / SENSE_RANGE_W; h.flee = Math.max(h.flee, 0.8 + prox * 1.6); h.next = null;
+      if (h.role === RIT.RROLE.SCOUT && (h.alertCd || 0) <= 0) {  // el vigía da la alarma
+        h.alertCd = 10;
+        const [agx2, agz2] = cellOf(h.pos.x, h.pos.z);
+        AIB.addEvent(BB, 'alert', agx2, agz2, GAME.timeLeft, AIB.AI.EVENT_DANGER);
+        const b = AIB.barkFor(h, 'danger', NOW_SEC, AIB.AI);
+        if (b) { h.lastBarkT = b.t; h.model.showBark(b.text); }
+      }
+    }
+    if ((h.alertCd || 0) > 0) h.alertCd -= dt;
   }
   const prevX = h.pos.x, prevZ = h.pos.z;
   if (hunting) {
@@ -453,7 +463,18 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     if (!h.goal || !newGoal || newGoal[0] !== h.goal[0] || newGoal[1] !== h.goal[1]) h.next = null;
     h.goal = newGoal;
     h.working = -1;
-    if (ritual.phase === RIT.PHASE.MISSIONS) {
+    if (h.role === RIT.RROLE.RESCUER) {
+      // RESCUER: junto a un KO, canaliza la reanimación (si el fantasma no está cerca).
+      const k = hunters.find((x) => x.alive && x.ko);
+      if (k && Math.hypot(h.pos.x - k.pos.x, h.pos.z - k.pos.z) <= 1.2) {
+        const dG = Math.hypot(ghost.x - k.pos.x, ghost.z - k.pos.z);
+        if (canRevive(dG, REVIVE_BLOCK)) {
+          h.working = 0; k.reviveT += dt;
+          if (k.reviveT >= REVIVE_TIME) { k.ko = false; k.lives = 1; k.reviveT = 0; k.model.play('Idle'); h.model.showBark('¡Arriba!'); }
+        }
+        // con el fantasma rondando espera junto al caído sin canalizar
+      } else if (h.goal) stepToward(h, h.goal, HUNTER_SPEED * speedMul, dt);
+    } else if (ritual.phase === RIT.PHASE.MISSIONS) {
       // REPAIR: si está sobre una misión incompleta, la trabaja; si no, camina hacia la meta.
       let m = null;
       for (const mi of ritual.missions) {
@@ -807,6 +828,19 @@ function buildCandidates(h) {
     case RIT.RROLE.REPAIR: {
       const inc = ritual.missions.filter((m) => !m.done).map((m) => ({ gx: m.gx, gz: m.gz, bias: 4 }));
       cands = inc.length ? inc : [{ gx: ritual.altar.gx, gz: ritual.altar.gz, bias: 1 }];
+      break;
+    }
+    case RIT.RROLE.RESCUER: {
+      const k = hunters.find((x) => x.alive && x.ko);
+      if (k) { const [kgx, kgz] = cellOf(k.pos.x, k.pos.z); cands = [{ gx: kgx, gz: kgz, bias: 6 }]; }
+      else cands = frontier.map(([gx, gz]) => ({ gx, gz, bias: 0.5 }));
+      break;
+    }
+    case RIT.RROLE.SCOUT: {
+      // patrulla rotando entre las estaciones de misión (o el altar si no hay)
+      const sites = ritual.missions.length ? ritual.missions : [{ gx: ritual.altar.gx, gz: ritual.altar.gz }];
+      const s = sites[Math.floor((performance.now() / 8000) % sites.length)];
+      cands = [{ gx: s.gx, gz: s.gz, bias: 2 }];
       break;
     }
     default:
