@@ -26,6 +26,11 @@ base; algunos números (p. ej. **3 investigadores → 8 supervivientes**) y la c
   los bots siempre ocupados y, al completarse todas, **desbloquea el ritual** (misiones → gather → channel →
   ganar). El rugido pasa a **acosar** (cordura↓ + ralentiza) en vez de dispersar. Spec:
   [`superpowers/specs/2026-06-10-misiones-design.md`](superpowers/specs/2026-06-10-misiones-design.md).
+- **R6 — Observación/Marcado + derribo/KO/mori + rutinas** (post-playtest 2): se elimina el rugido; el
+  fantasma **observa** a un objetivo hasta **marcarlo** (marcado = kill de 1 golpe en cacería; sin marca =
+  2 vidas → **KO** → reanimación de compañeros o **Memento Mori**); rutinas complementarias
+  (REPAIR/SCOUT/RESCUER) y fix de huida (nunca rutas hacia el fantasma). Spec:
+  [`superpowers/specs/2026-06-11-observacion-ko-rutinas-design.md`](superpowers/specs/2026-06-11-observacion-ko-rutinas-design.md).
 
 ## Pitch
 Phasmophobia **al revés**, ambientado en los **Backrooms**. Eres **la entidad** (1ª persona).
