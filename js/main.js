@@ -47,7 +47,6 @@ const HUNTER_FLEE_SPEED = 3.6;
 const KILL_RANGE = 1.8;
 
 const SCARE_RANGE = 6;
-const SCARE_FLEE = 4;
 const ROAR_CD = 8;
 const REVEAL_DUR = 5;
 const ROAR_INTERRUPT_WINDOW = 0.3;   // ventana (s) tras un rugido en la que interrumpe la canalización
@@ -593,7 +592,9 @@ const el = (id) => document.getElementById(id); const banner = el('glitchBanner'
 function updateHUD(hunting) {
   const m = Math.floor(GAME.timeLeft / 60), s = Math.floor(GAME.timeLeft % 60);
   el('matchTime').textContent = `${m}:${s.toString().padStart(2, '0')}`;
-  if (ritual.phase === RIT.PHASE.CHANNEL || ritual.phase === RIT.PHASE.DONE) {
+  if (ritual.phase === RIT.PHASE.MISSIONS) {
+    el('missions').textContent = RIT.missionsDoneCount(ritual) + '/' + ritual.missions.length;
+  } else if (ritual.phase === RIT.PHASE.CHANNEL || ritual.phase === RIT.PHASE.DONE) {
     el('missions').textContent = 'RITUAL ' + Math.round(ritual.channel * 100) + '%';
   } else {
     el('missions').textContent = RIT.depositedCount(ritual) + '/' + ritual.objects.length;
@@ -633,6 +634,10 @@ function drawMinimap() {
   mmCtx.clearRect(0, 0, MM, MM); if (maze0) mmCtx.drawImage(maze0, 0, 0);
   const [agx, agz] = [ritual.altar.gx, ritual.altar.gz];
   mmCtx.fillStyle = '#9d4edd'; mmCtx.fillRect(agx * cs - 2, agz * cs - 2, cs + 3, cs + 3); // altar
+  for (const m of ritual.missions) {
+    mmCtx.fillStyle = m.done ? '#37d67a' : '#ff5555';
+    mmCtx.fillRect(m.gx * cs - 1, m.gz * cs - 1, cs + 1.5, cs + 1.5);
+  }
   for (const o of ritual.objects) {
     if (o.status === RIT.OBJ.DEPOSITED) continue;
     mmCtx.fillStyle = o.status === RIT.OBJ.CARRIED ? '#ffd166' : '#d8c089';
