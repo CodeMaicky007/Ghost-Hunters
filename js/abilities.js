@@ -20,6 +20,8 @@ export const AB = {
   HUNT_DUR: 60,          // s de cacería activada (más larga tras playtest)
   HUNT_SPEED_MULT: 1.3,  // multiplicador de velocidad del fantasma en cacería
   SENSE_RANGE: 10,       // unidades de mundo: rango de "sonido"/sentido (suben al detectarte y se alejan)
+  OBS_RANGE: 25,         // unidades de mundo: alcance de la observación
+  OBS_RATE: 1 / 12,      // progreso/seg mirando al objetivo (100% en ~12 s)
   TELEPORT_RANGE: 12,    // celdas máx de teletransporte
 };
 
@@ -34,6 +36,7 @@ export function createAbilities() {
     traps: [],       // [{gx, gz, t}]
     decoy: null,     // {gx, gz, t} | null
     spectral: 0,     // s restantes de visión espectral
+    observe: { target: null, progress: {} }, // objetivo actual + progreso 0..1 por superviviente
   };
 }
 
@@ -78,3 +81,14 @@ export function agentInTrap(ab, gx, gz, p = AB) {
 
 export function huntReady(ab) { return ab.energy >= 1; }
 export function spendForHunt(ab) { ab.energy = 0; }
+
+// Observación: el fantasma fija un objetivo; mirándolo (visible) su progreso
+// sube hasta 1 (MARCADO). El progreso es por superviviente y persiste.
+export function setObserveTarget(ab, id) { ab.observe.target = id; }
+export function tickObserve(ab, dt, ctx = {}, p = AB) {
+  const t = ab.observe.target;
+  if (t == null || !ctx.visible) return;
+  ab.observe.progress[t] = Math.min(1, (ab.observe.progress[t] || 0) + dt * p.OBS_RATE);
+}
+export function obsProgress(ab, id) { return ab.observe.progress[id] || 0; }
+export function isMarked(ab, id) { return obsProgress(ab, id) >= 1; }

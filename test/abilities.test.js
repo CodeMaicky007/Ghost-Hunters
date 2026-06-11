@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAbilities, AB, KEY, tickEnergy, canActivate, activate, agentInTrap, huntReady, spendForHunt } from '../js/abilities.js';
+import { createAbilities, AB, KEY, tickEnergy, canActivate, activate, agentInTrap, huntReady, spendForHunt, setObserveTarget, tickObserve, obsProgress, isMarked } from '../js/abilities.js';
 
 test('createAbilities inicializa energía 0 y activos vacíos', () => {
   const ab = createAbilities();
@@ -112,4 +112,23 @@ test('huntReady y spendForHunt', () => {
   assert.equal(huntReady(ab), true);
   spendForHunt(ab);
   assert.equal(ab.energy, 0);
+});
+
+test('observación: sube con visible, persiste al cambiar de objetivo, marca al 100%', () => {
+  const ab = createAbilities();
+  assert.equal(obsProgress(ab, 3), 0);
+  tickObserve(ab, 1, { visible: true });            // sin target -> no sube
+  setObserveTarget(ab, 3);
+  tickObserve(ab, 1, { visible: false });           // sin visión -> no sube
+  assert.equal(obsProgress(ab, 3), 0);
+  tickObserve(ab, 1, { visible: true });
+  assert.ok(Math.abs(obsProgress(ab, 3) - AB.OBS_RATE) < 1e-9);
+  setObserveTarget(ab, 5);                          // cambia de objetivo
+  tickObserve(ab, 1, { visible: true });
+  assert.ok(obsProgress(ab, 3) > 0);                // el progreso de 3 persiste
+  setObserveTarget(ab, 3);
+  tickObserve(ab, 1000, { visible: true });         // clamp a 1
+  assert.equal(obsProgress(ab, 3), 1);
+  assert.equal(isMarked(ab, 3), true);
+  assert.equal(isMarked(ab, 5), false);
 });
