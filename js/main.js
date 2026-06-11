@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { loadAllAssets } from './assets.js';
 import { placeEnv } from './env.js';
 import { bakeGrid } from './grid.js';
-import { collidesBoxGrid, parryChance, rollParry, PARRY_DEFAULTS } from './logic.js';
+import { collidesBoxGrid, parryChance, rollParry, PARRY_DEFAULTS, hitResult, canRevive } from './logic.js';
 import { HunterModel } from './hunters.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
@@ -394,6 +394,8 @@ function fearCtx(h, ghost, hunting) {
 
 function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   if (!h.alive) { h.model.update(dt); return; }
+  if (h.ko) { h.model.setState({ alive: false }); h.model.update(dt); return; } // KO: tirado, no actúa
+  if (h.hitCd > 0) h.hitCd -= dt;
   if (h.flee > 0) h.flee -= dt;
   {
     const r = AIB.updateFear(h, fearCtx(h, ghost, hunting), dt);
@@ -414,16 +416,23 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     h.working = -1;
     const dest = DISPERSAL && DISPERSAL.get(h.id);
     stepToward(h, dest || farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
-    if (ghostOnFloor0 && stun <= 0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) {
+    if (ghostOnFloor0 && stun <= 0 && h.hitCd <= 0 && Math.hypot(h.pos.x - ghost.x, h.pos.z - ghost.z) < KILL_RANGE) {
       if (!h.parryUsed) {
         h.parryUsed = true; // un parry por cacería: gastado tanto si acierta como si falla
         if (rollParry(parryChance(h.bravery, h.panic, PARRY))) {
           stun = STUN_DUR; h.flee = PARRY_FLEE; h.next = null;
           h.model.play('HitRecieve'); h.model.showBark('¡Bloqueado!'); sfx.parry();
-          return; // parry exitoso: no matas a nadie y quedas aturdido
+          return; // parry exitoso: no golpeas y quedas aturdido
         }
       }
-      killHunter(h); return; // sin parry disponible o falló -> muere
+      // Golpe: marcado = muerte directa; sin marca pierde vida y a la última cae KO.
+      const r = hitResult(ABL.isMarked(ab, h.id), h.lives);
+      h.lives = r.lives; h.hitCd = HIT_COOLDOWN;
+      if (r.outcome === 'dead') { killHunter(h); return; }
+      if (r.outcome === 'down') { enterKO(h); return; }
+      h.model.play('HitRecieve'); h.model.showBark('¡AGH!'); sfx.kill(); // herido
+      h.flee = 2.5; h.next = null;
+      return;
     }
   } else if (h.flee > 0) {
     h.working = -1; stepToward(h, farthestCell(ghost.x, ghost.z), HUNTER_FLEE_SPEED * speedMul, dt);
@@ -486,6 +495,13 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
     if (b) { h.lastBarkT = b.t; h.model.showBark(b.text); if (h.fear > 0.5) h.model.glanceBack(); }
   }
   h.model.update(dt);
+}
+// Derribo (KO): no muere — queda en el suelo esperando reanimación o el mori.
+function enterKO(h) {
+  h.ko = true; h.reviveT = 0; h.working = -1;
+  { const [gx, gz] = cellOf(h.pos.x, h.pos.z); RIT.dropCarried(ritual, h.id, gx, gz); }
+  { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'down', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); }
+  h.model.setSpectral(false); h.model.play('Death'); sfx.kill();
 }
 function killHunter(h) {
   h.alive = false;
@@ -569,7 +585,7 @@ let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
 function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
-  for (const h of hunters) if (h.alive) h.parryUsed = false; // un parry por cacería (muertos: irrelevante)
+  for (const h of hunters) if (h.alive) { h.parryUsed = false; h.lives = LIVES_UNMARKED; h.hitCd = 0; } // parry + vidas por cacería
 }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
@@ -740,8 +756,8 @@ function runCoordinator(dt, hunting) {
   BB.events = BB.events.filter((e) => e.t - GAME.timeLeft < 30); // poda eventos viejos
   const threat = AIB.computeThreat({ hunting, recentEvents, deaths, avgFear });
   const roles = RIT.assignRitualRoles(
-    hunters.map((h) => { const [gx, gz] = cellOf(h.pos.x, h.pos.z); return { id: h.id, alive: h.alive, bravery: h.bravery, gx, gz }; }),
-    ritual, threat
+    hunters.map((h) => { const [gx, gz] = cellOf(h.pos.x, h.pos.z); return { id: h.id, alive: h.alive, ko: !!h.ko, bravery: h.bravery, gx, gz }; }),
+    ritual, threat, { koIds: hunters.filter((h) => h.alive && h.ko).map((h) => h.id) }
   );
   for (const h of hunters) if (roles.has(h.id)) h.role = roles.get(h.id);
 }
@@ -931,7 +947,7 @@ function update(dt) {
   if (ritual.phase === RIT.PHASE.CHANNEL && !hunting) {
     const [ax, az] = worldOf(ritual.altar.gx, ritual.altar.gz);
     let nCh = 0;
-    for (const h of hunters) if (h.alive && Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 0.6) nCh++;
+    for (const h of hunters) if (h.alive && !h.ko && Math.hypot(h.pos.x - ax, h.pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 0.6) nCh++;
     const ghostNear = Math.hypot(pos.x - ax, pos.z - az) <= RIT.RCFG.ALTAR_RANGE + 1.5 && hunt.active > 0; // sin rugido: interrumpe la cacería junto al altar
     RIT.channelTick(ritual, nCh, dt, { interrupt: ghostNear });
   }
