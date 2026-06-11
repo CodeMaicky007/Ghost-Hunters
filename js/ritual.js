@@ -113,6 +113,11 @@ export function assignRitualRoles(agents, ritual, threat) {
   const out = new Map();
   const alive = agents.filter((a) => a.alive);
 
+  if (ritual.phase === PHASE.MISSIONS) {
+    for (const a of alive) out.set(a.id, RROLE.REPAIR);
+    return out;
+  }
+
   if (ritual.phase === PHASE.CHANNEL) {
     const dA = (a) => Math.abs(a.gx - ritual.altar.gx) + Math.abs(a.gz - ritual.altar.gz);
     const byNear = alive.slice().sort((x, y) => dA(x) - dA(y));

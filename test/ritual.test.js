@@ -204,3 +204,16 @@ test('workMission no hace nada fuera de fase MISSIONS', () => {
   const r = createRitual([], [[1, 1]], [0, 0]); // GATHER
   assert.equal(workMission(r, 0, 10, 1), false);
 });
+
+test('assignRitualRoles en MISSIONS: todos los vivos a REPAIR', () => {
+  const r = createRitual([[1, 1]], [[2, 2]], [0, 0]); // MISSIONS
+  const agents = [
+    { id: 0, alive: true, bravery: 0.5, gx: 0, gz: 0 },
+    { id: 1, alive: false, bravery: 0.8, gx: 1, gz: 1 },
+    { id: 2, alive: true, bravery: 0.2, gx: 2, gz: 2 },
+  ];
+  const roles = assignRitualRoles(agents, r, 0);
+  assert.equal(roles.get(0), RROLE.REPAIR);
+  assert.equal(roles.get(2), RROLE.REPAIR);
+  assert.equal(roles.has(1), false); // muerto, sin rol
+});
