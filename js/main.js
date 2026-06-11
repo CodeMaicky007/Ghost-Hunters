@@ -270,6 +270,8 @@ function makeRitual(assets) {
     let mesh, mat;
     if (assets && assets.tv) {
       mesh = placeProp(assets.tv, wx, wz, MISSION_HEIGHT, true);
+      // Material ÚNICO clonado por estación (a propósito): el TV comparte un material
+      // emissive y así el sync de progreso solo toca un mat por monitor.
       mesh.traverse((o) => { if (o.isMesh && !mat) mat = (Array.isArray(o.material) ? o.material[0] : o.material).clone(); });
       mesh.traverse((o) => { if (o.isMesh) o.material = mat; });
     } else {
@@ -397,7 +399,8 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
   const [hgx, hgz] = cellOf(h.pos.x, h.pos.z);
   const trapped = ABL.agentInTrap(ab, hgx, hgz);
   if (trapped) { h.stress = Math.min(1, h.stress + 0.4 * dt); if (Math.random() < 0.02) h.next = null; }
-  const speedMul = (trapped ? 0.5 : 1) * (h.shaken > 0 ? SHAKEN_SLOW : 1);
+  const shakenSlow = h.shaken > 0 ? SHAKEN_SLOW : 1;   // evaluado 1 vez: movimiento y reparación van a la par
+  const speedMul = (trapped ? 0.5 : 1) * shakenSlow;
   if (h.shaken > 0) h.shaken = Math.max(0, h.shaken - dt);
   // Sentido del fantasma (invisible): cuanto más cerca, más se alejan. Nunca van hacia él.
   if (!hunting) {
@@ -447,7 +450,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
         const [mwx, mwz] = worldOf(mi.gx, mi.gz);
         if (Math.hypot(h.pos.x - mwx, h.pos.z - mwz) <= 1.0) { m = mi; break; }
       }
-      if (m) { h.working = 0; RIT.workMission(ritual, m.id, dt, REPAIR_RATE * (h.shaken > 0 ? SHAKEN_SLOW : 1)); }
+      if (m) { h.working = 0; RIT.workMission(ritual, m.id, dt, REPAIR_RATE * shakenSlow); }
       else if (h.goal) stepToward(h, h.goal, HUNTER_SPEED * speedMul, dt);
     } else {
       // GATHER: recoger/depositar cruces (R2) — bloque existente sin cambios.
@@ -646,7 +649,7 @@ function drawMinimap() {
   if (revealTimer > 0 && revealedBot && revealedBot.alive) { mmCtx.fillStyle = '#ff3b3b'; mmCtx.beginPath(); mmCtx.arc((revealedBot.pos.x / CELL) * cs, (revealedBot.pos.z / CELL) * cs, 4, 0, 7); mmCtx.fill(); }
   mmCtx.fillStyle = '#c77dff'; mmCtx.beginPath(); mmCtx.arc((pos.x / CELL) * cs, (pos.z / CELL) * cs, 3, 0, 7); mmCtx.fill();
   if (debugAI) {
-    const COLR = { EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', FETCH: '#ffd166', GUARD: '#ffae42', CHANNELER: '#c77dff', DEFEND: '#37d67a', DISTRACT: '#ff3b3b' };
+    const COLR = { REPAIR: '#00d4ff', EXPLORE_A: '#4f8cff', EXPLORE_B: '#37d67a', FETCH: '#ffd166', GUARD: '#ffae42', CHANNELER: '#c77dff', DEFEND: '#37d67a', DISTRACT: '#ff3b3b' };
     for (const h of hunters) {
       if (!h.alive) continue;
       mmCtx.fillStyle = COLR[h.role] || '#fff';
