@@ -558,12 +558,15 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
 // Derribo (KO): no muere — queda en el suelo esperando reanimación o el mori.
 function enterKO(h) {
   h.ko = true; h.reviveT = 0; h.working = -1;
+  if (ab.observe.target === h.id) ab.observe.target = null; // re-apunta: el caído ya no es objetivo
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); RIT.dropCarried(ritual, h.id, gx, gz); }
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'down', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); }
   h.model.setSpectral(false); h.model.play('Death'); sfx.kill();
 }
 function killHunter(h) {
   h.alive = false;
+  if (ab.observe.target === h.id) ab.observe.target = null;
+  delete ab.observe.progress[h.id]; // el progreso de un muerto ya no significa nada
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'death', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); }
   h.model.setSpectral(false); h.model.play('Death'); h.model.update(0); sfx.kill();
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); RIT.dropCarried(ritual, h.id, gx, gz); }
@@ -645,7 +648,7 @@ let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
 function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
-  for (const h of hunters) if (h.alive) { h.parryUsed = false; h.lives = LIVES_UNMARKED; h.hitCd = 0; } // parry + vidas por cacería
+  for (const h of hunters) if (h.alive && !h.ko) { h.parryUsed = false; h.lives = LIVES_UNMARKED; h.hitCd = 0; } // los KO no recuperan vidas: revividos = 1 // parry + vidas por cacería
 }
 function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
