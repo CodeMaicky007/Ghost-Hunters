@@ -31,6 +31,13 @@ base; algunos números (p. ej. **3 investigadores → 8 supervivientes**) y la c
   2 vidas → **KO** → reanimación de compañeros o **Memento Mori**); rutinas complementarias
   (REPAIR/SCOUT/RESCUER) y fix de huida (nunca rutas hacia el fantasma). Spec:
   [`superpowers/specs/2026-06-11-observacion-ko-rutinas-design.md`](superpowers/specs/2026-06-11-observacion-ko-rutinas-design.md).
+- **R7 — Presentación AAA** (12 jun 2026): postpro (bloom + grano + viñeta + aberración + grading frío
+  "el otro lado" en cacería), **paneles fluorescentes** de techo (InstancedMesh + flicker + 6 PointLights),
+  **linternas** (cono volumétrico por bot + pool de 4 SpotLights a los más cercanos, estroboscopia
+  moribunda en cacería), cámara con trauma-shake/head-bob/FOV dinámico, partículas (polvo ambiental +
+  bursts de kill/KO/teleport), trampa = sello ritual animado, señuelo = wisp con luz, audio por capas
+  (zumbido fluorescente → corte → rumble; latido por proximidad; viento espectral; susurros) y UI CRT
+  (VT323/Special Elite, paleta única). Lógica pura testeable en `logic.js` (paneles/flicker/trauma/latido).
 
 ## Pitch
 Phasmophobia **al revés**, ambientado en los **Backrooms**. Eres **la entidad** (1ª persona).

@@ -113,3 +113,57 @@ export function hitResult(marked, lives) {
 
 // Reanimar a un KO solo es posible si el fantasma no está cerca.
 export function canRevive(distGhost, blockRange) { return distGhost >= blockRange; }
+
+// ============================================================
+//  Presentación (R7) — paneles fluorescentes, flicker, cámara.
+//  Funciones puras: la integración three vive en lights.js/fx.js.
+// ============================================================
+
+// Celdas de panel fluorescente: rejilla cada `step` celdas sobre celdas abiertas,
+// arrancando en el centro del primer bloque para no pegarlos al borde del mapa.
+export function pickPanelCells(map, cols, rows, step = 5) {
+  const off = Math.floor(step / 2);
+  const out = [];
+  for (let z = off; z < rows; z += step)
+    for (let x = off; x < cols; x += step)
+      if (map[z][x] === 0) out.push([x, z]);
+  return out;
+}
+
+// k celdas lo más repartidas posible (greedy farthest-point, determinista:
+// mismo input -> mismas picks). Para decidir qué paneles llevan luz real.
+export function spreadPicks(cells, k) {
+  if (!cells.length || k <= 0) return [];
+  const picks = [cells[0]];
+  while (picks.length < Math.min(k, cells.length)) {
+    let best = null, bd = -1;
+    for (const c of cells) {
+      let dmin = Infinity;
+      for (const p of picks) { const d = (c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2; if (d < dmin) dmin = d; }
+      if (dmin > bd) { bd = dmin; best = c; }
+    }
+    picks.push(best);
+  }
+  return picks;
+}
+
+// Brillo 0..1 de un fluorescente en el instante t (determinista por seed).
+// Casi siempre ~1 con micro-ruido de red; ventanas breves de apagón parcial.
+export function fluorFlicker(t, seed) {
+  const h = Math.sin(t * 7.3 + seed * 12.9898) * 43758.5453;
+  const n = h - Math.floor(h);                       // ruido 0..1
+  const slow = Math.sin(t * 0.7 + seed * 6.1);       // fase lenta propia del panel
+  if (slow > 0.92 && n > 0.55) return n * 0.3;       // apagón breve
+  return 0.9 + n * 0.1;
+}
+
+// Trauma de cámara: decae lineal; la amplitud del shake es cuadrática para que
+// los sustos pequeños apenas muevan y los grandes peguen (estándar AAA).
+export function decayTrauma(trauma, dt, rate = 1.5) { return Math.max(0, trauma - rate * dt); }
+export function shakeAmp(trauma) { return trauma * trauma; }
+
+// Intervalo del latido (s) según proximidad 0..1 (0 = lejos, 1 = encima).
+export function heartbeatInterval(prox) {
+  const p = prox < 0 ? 0 : prox > 1 ? 1 : prox;
+  return 1.3 - 0.85 * p;
+}

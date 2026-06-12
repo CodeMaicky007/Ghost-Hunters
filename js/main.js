@@ -7,10 +7,13 @@
 // ============================================================
 import * as THREE from 'three';
 import { loadAllAssets } from './assets.js';
-import { placeEnv } from './env.js';
+import { placeEnv, TARGET_CEIL } from './env.js';
 import { bakeGrid } from './grid.js';
-import { collidesBoxGrid, parryChance, rollParry, PARRY_DEFAULTS, hitResult, canRevive } from './logic.js';
+import { collidesBoxGrid, parryChance, rollParry, PARRY_DEFAULTS, hitResult, canRevive, heartbeatInterval } from './logic.js';
 import { HunterModel } from './hunters.js';
+import { createPost, createCameraFeel, createDust, createBursts } from './fx.js';
+import { buildCeilingLights, createFlashlights } from './lights.js';
+import { dressFloor } from './setdress.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
 import * as ABL from './abilities.js';
@@ -161,16 +164,27 @@ camera.rotation.order = 'YXZ';
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;   // curva fílmica: luces calientes, negros con cuerpo
+renderer.toneMappingExposure = 1.1;
 renderer.domElement.id = 'game-canvas';
 document.body.appendChild(renderer.domElement);
 const canvasEl = renderer.domElement;
 
-const ambient = new THREE.AmbientLight(0xbda86a, 0.85);
+const ambient = new THREE.AmbientLight(0xbda86a, 0.5);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0xbda86a, 0x191406, 0.5);
+const hemi = new THREE.HemisphereLight(0xbda86a, 0x191406, 0.35);
 scene.add(hemi);
-const aura = new THREE.PointLight(0x9d4edd, 0.8, 10, 1.8);
+const aura = new THREE.PointLight(0x9d4edd, 0.8, 12, 1.8);
 scene.add(aura);
+
+// --- Presentación (R7): postpro, cámara, partículas, luces diegéticas ---
+const post = createPost(renderer, scene, camera);
+const feel = createCameraFeel(camera, 80);
+const dust = createDust(scene);
+const bursts = createBursts(scene);
+const torches = createFlashlights(scene, 4);
+let ceiling = { update() {} };   // paneles fluorescentes; se construye en boot()
+let ghostMoving = false;         // lo fija moveGhost(); lo lee la sensación de cámara
 
 // makeCanvas: usado por el minimapa.
 function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
@@ -180,6 +194,14 @@ function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width 
 // ============================================================
 let actx = null, master = null, musicEl = null;
 let senseOsc = null, senseGain = null;
+let humGain = null, rumbleGain = null, windGain = null;   // capas ambientales (R7)
+let heartT = 0, whisperT = 14;                            // temporizadores latido/susurros
+function noiseBuffer(seconds = 2) {
+  const b = actx.createBuffer(1, actx.sampleRate * seconds, actx.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return b;
+}
 function initAudio() {
   if (actx) return;
   actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -187,11 +209,51 @@ function initAudio() {
   senseOsc = actx.createOscillator(); senseGain = actx.createGain();
   senseOsc.type = 'sine'; senseOsc.frequency.value = 54; senseGain.gain.value = 0.0001;
   senseOsc.connect(senseGain); senseGain.connect(master); senseOsc.start();
+  // Zumbido fluorescente (50/60Hz + armónicos): el sonido-base de los Backrooms.
+  const hum = actx.createOscillator(); hum.type = 'sawtooth'; hum.frequency.value = 120;
+  const humF = actx.createBiquadFilter(); humF.type = 'lowpass'; humF.frequency.value = 420;
+  humGain = actx.createGain(); humGain.gain.value = 0.013;
+  hum.connect(humF); humF.connect(humGain); humGain.connect(master); hum.start();
+  // Rumble grave de cacería (ruido filtrado, entra tras el corte de luces).
+  const rum = actx.createBufferSource(); rum.buffer = noiseBuffer(); rum.loop = true;
+  const rumF = actx.createBiquadFilter(); rumF.type = 'lowpass'; rumF.frequency.value = 90;
+  rumbleGain = actx.createGain(); rumbleGain.gain.value = 0;
+  rum.connect(rumF); rumF.connect(rumbleGain); rumbleGain.connect(master); rum.start();
+  // Viento espectral: respira con tu propio movimiento (el fantasma no pisa, fluye).
+  const wind = actx.createBufferSource(); wind.buffer = noiseBuffer(); wind.loop = true;
+  const windF = actx.createBiquadFilter(); windF.type = 'bandpass'; windF.frequency.value = 520; windF.Q.value = 0.7;
+  windGain = actx.createGain(); windGain.gain.value = 0;
+  wind.connect(windF); windF.connect(windGain); windGain.connect(master); wind.start();
 }
-function startMusic() { if (musicEl) return; musicEl = new Audio('assets/music/track.mp3'); musicEl.loop = true; musicEl.volume = 0.5; musicEl.play().catch(() => {}); }
-function duckMusic(down) { if (musicEl) musicEl.volume = down ? 0.12 : 0.5; }
-function tone({ type = 'sine', f0, f1, dur, vol = 0.3 }) {
+// Corte de cacería: el zumbido MUERE en seco -> medio segundo de silencio -> rumble.
+function setHuntAudio(on) {
   if (!actx) return; const t = actx.currentTime;
+  humGain.gain.cancelScheduledValues(t);
+  humGain.gain.setTargetAtTime(on ? 0.0001 : 0.013, t, on ? 0.02 : 1.6);
+  rumbleGain.gain.cancelScheduledValues(t);
+  if (on) { rumbleGain.gain.setValueAtTime(0.0001, t); rumbleGain.gain.setTargetAtTime(0.45, t + 0.6, 1.1); }
+  else rumbleGain.gain.setTargetAtTime(0.0001, t, 0.35);
+}
+// Latido doble (lub-dub) — la tensión de tener a una presa cerca en la oscuridad.
+function heartbeat() {
+  tone({ type: 'sine', f0: 58, f1: 36, dur: 0.14, vol: 0.5 });
+  tone({ type: 'sine', f0: 52, f1: 33, dur: 0.12, vol: 0.32, at: 0.16 });
+}
+// Susurro lejano: soplo de aire filtrado, aleatorio, solo fuera de cacería.
+function whisper() {
+  if (!actx) return; const t = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = noiseBuffer(1); src.loop = false;
+  const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 650 + Math.random() * 900; f.Q.value = 9;
+  const g = actx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.02, t + 0.7);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+  src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t + 1.7);
+}
+function startMusic() { if (musicEl) return; musicEl = new Audio('assets/music/freesound_community-dark-drone-ambient-66071.mp3'); musicEl.loop = true; musicEl.volume = 0.4; musicEl.play().catch(() => {}); }
+function duckMusic(down) { if (musicEl) musicEl.volume = down ? 0.1 : 0.4; }
+function tone({ type = 'sine', f0, f1, dur, vol = 0.3, at = 0 }) {
+  if (!actx) return; const t = actx.currentTime + at;
   const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
   const g = actx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
@@ -345,6 +407,7 @@ function makeHunters(chars) {
     const gltf = chars && chars[i % chars.length] && chars[i % chars.length].gltf;
     const model = gltf ? new HunterModel(gltf) : makeBoxHunter(fallbackColors[i % fallbackColors.length]);
     model.setPos(wx, 0, wz); scene.add(model.root);
+    torches.attach(model);   // linterna: cono volumétrico + lente (spot real si está cerca)
     hunters.push({
       id: i, pos: new THREE.Vector3(wx, 0, wz), model, alive: true,
       flee: 0, repath: 0, next: null, working: -1,
@@ -470,6 +533,7 @@ function updateHunter(h, dt, ghost, hunting, ghostOnFloor0) {
         if (rollParry(parryChance(h.bravery, h.panic, PARRY))) {
           stun = STUN_DUR; h.flee = PARRY_FLEE; h.next = null;
           h.model.play('HitRecieve'); h.model.showBark('¡Bloqueado!'); sfx.parry();
+          feel.addTrauma(0.6);   // el parry te sacude a TI
           return; // parry exitoso: no golpeas y quedas aturdido
         }
       }
@@ -562,6 +626,8 @@ function enterKO(h) {
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); RIT.dropCarried(ritual, h.id, gx, gz); }
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'down', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); }
   h.model.setSpectral(false); h.model.play('Death'); sfx.kill();
+  bursts.spawn(h.pos.x, 1.1, h.pos.z, { color: 0x8fa3b8, count: 18, speed: 1.2, up: 0.8 });
+  feel.addTrauma(0.3); feel.kick(3);
 }
 function killHunter(h) {
   h.alive = false;
@@ -569,6 +635,8 @@ function killHunter(h) {
   delete ab.observe.progress[h.id]; // el progreso de un muerto ya no significa nada
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); AIB.addEvent(BB, 'death', gx, gz, GAME.timeLeft, AIB.AI.DEATH_DANGER); }
   h.model.setSpectral(false); h.model.play('Death'); h.model.update(0); sfx.kill();
+  bursts.spawn(h.pos.x, 1.2, h.pos.z, { color: 0xc77dff, count: 34, speed: 2.0, up: 1.8, size: 0.11 });
+  feel.addTrauma(0.45); feel.kick(5);
   { const [gx, gz] = cellOf(h.pos.x, h.pos.z); RIT.dropCarried(ritual, h.id, gx, gz); }
   if (ritual.phase === RIT.PHASE.CHANNEL) ritual.channel = Math.max(0, ritual.channel - 0.1); // penalización por matar a un canalizador
   checkEnd();
@@ -647,10 +715,10 @@ const VISION_R = AIB.AI.VISION_RADIUS;
 let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
-function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
+function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); setHuntAudio(true); feel.addTrauma(0.55); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
   for (const h of hunters) if (h.alive && !h.ko) { h.parryUsed = false; h.lives = LIVES_UNMARKED; h.hitCd = 0; } // los KO no recuperan vidas: revividos = 1 // parry + vidas por cacería
 }
-function endHunt() { hunt.active = 0; duckMusic(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
+function endHunt() { hunt.active = 0; duckMusic(false); setHuntAudio(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
 function updateHunt(dt) {
   if (escalated) { hunt.active = ABL.AB.HUNT_DUR; return true; }
   if (hunt.active > 0) { hunt.active -= dt; if (hunt.active <= 0) endHunt(); }
@@ -764,19 +832,27 @@ function drawMinimap() {
 // ============================================================
 function applyAtmosphere() {
   const lit = hunt.active <= 0;
-  ambient.color.setHex(0xbda86a);
-  const flicker = lit ? 1 : (Math.sin(performance.now() * 0.025) > 0.6 ? 0.0 : 0.06); // parpadeo por tiempo (no por frame)
-  ambient.intensity = lit ? 0.85 : flicker;
-  hemi.intensity = lit ? 0.5 : 0.02;
-  const fogc = 0x1c1808; scene.fog.color.setHex(fogc); scene.background.setHex(fogc);
+  if (lit) {
+    ambient.color.setHex(0xbda86a); ambient.intensity = 0.5;
+    hemi.color.setHex(0xbda86a); hemi.groundColor.setHex(0x191406); hemi.intensity = 0.35;
+    scene.fog.color.setHex(0x1c1808); scene.background.setHex(0x1c1808);
+  } else {
+    // "El otro lado": penumbra fría — los humanos no ven nada; tú ves siluetas.
+    const flicker = Math.sin(performance.now() * 0.025) > 0.6 ? 0.0 : 0.05; // parpadeo por tiempo (no por frame)
+    ambient.color.setHex(0x8fb3a6); ambient.intensity = flicker;
+    hemi.color.setHex(0x4a6a60); hemi.groundColor.setHex(0x0a0f0c); hemi.intensity = 0.22;
+    scene.fog.color.setHex(0x05080a); scene.background.setHex(0x05080a);
+  }
 }
 function moveGhost(dt) {
+  ghostMoving = false;
   if (moriT > 0) return; // clavado durante la ejecución
   const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
   const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
   const move = new THREE.Vector3();
   if (keys['KeyW']) move.add(fwd); if (keys['KeyS']) move.sub(fwd); if (keys['KeyD']) move.add(right); if (keys['KeyA']) move.sub(right);
   if (move.lengthSq() > 0) {
+    ghostMoving = true;
     move.normalize().multiplyScalar(SPEED * (hunt.active > 0 ? ABL.AB.HUNT_SPEED_MULT : 1) * (stun > 0 ? STUN_SLOW : 1) * dt);
     if (!collidesPlayer(pos.x + move.x, pos.z)) pos.x += move.x;
     if (!collidesPlayer(pos.x, pos.z + move.z)) pos.z += move.z;
@@ -785,7 +861,9 @@ function moveGhost(dt) {
   currentFloor = 0;
   pos.y = h + EYE; camera.position.copy(pos); camera.rotation.set(pitch, yaw, 0);
   aura.position.set(pos.x, h + EYE, pos.z);
-  aura.intensity = hunt.active > 0 ? 1.2 : 0.12; // invisible (tenue) en normal, visible en cacería
+  aura.intensity = hunt.active > 0 ? 2.2 : 0.12; // invisible (tenue) en normal; en cacería te alumbra el paso
+  // Viento espectral ligado a tu movimiento (el fantasma fluye, no pisa).
+  if (windGain) windGain.gain.setTargetAtTime(ghostMoving ? (hunt.active > 0 ? 0.03 : 0.02) : 0.0001, actx.currentTime, 0.25);
 }
 
 // Predicado de celda abierta para la IA (grid de IA, no el fino de colisión).
@@ -912,16 +990,22 @@ function pushRecent(h) {
   }
 }
 
-const trapMeshes = [];   // [{gx, gz, mesh}]
+const trapMeshes = [];   // [{gx, gz, mesh, inner, outer}]
 let decoyMesh = null;    // malla del señuelo activo
+let decoyLight = null;   // luz del señuelo (vive y muere con la malla)
 function spawnTrapMesh(gx, gz) {
   const [wx, wz] = worldOf(gx, gz);
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.3, ABL.AB.TRAP_RADIUS * CELL, 24),
-    new THREE.MeshBasicMaterial({ color: 0x9d4edd, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false })
-  );
-  ring.rotation.x = -Math.PI / 2; ring.position.set(wx, 0.05, wz);
-  scene.add(ring); trapMeshes.push({ gx, gz, mesh: ring });
+  // Sello ritual: aro exterior fino + hexagrama interior que rota en sentido
+  // contrario; el grupo gira y pulsa en update() (los muertos se limpian allí).
+  const group = new THREE.Group();
+  const R = ABL.AB.TRAP_RADIUS * CELL;
+  const mat = (op) => new THREE.MeshBasicMaterial({ color: 0x9d4edd, transparent: true, opacity: op, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
+  const outer = new THREE.Mesh(new THREE.RingGeometry(R - 0.07, R, 40), mat(0.5));
+  const inner = new THREE.Mesh(new THREE.RingGeometry(R * 0.35, R * 0.52, 6), mat(0.4));
+  outer.rotation.x = inner.rotation.x = -Math.PI / 2;
+  group.add(outer); group.add(inner);
+  group.position.set(wx, 0.06, wz);
+  scene.add(group); trapMeshes.push({ gx, gz, mesh: group, inner, outer });
 }
 
 function useTeleport() {
@@ -931,7 +1015,9 @@ function useTeleport() {
   const [cgx, cgz] = cellOf(pos.x, pos.z);
   if (gx === cgx && gz === cgz) return; // miras a un muro pegado: no malgastes la habilidad
   ABL.activate(ab, ABL.KEY.TELEPORT, [gx, gz]);
+  bursts.spawn(pos.x, EYE * 0.7, pos.z, { color: 0x9d4edd, count: 20, speed: 1.4, up: 1.0 });   // estela al partir
   const [wx, wz] = worldOf(gx, gz); pos.x = wx; pos.z = wz;
+  post.flash(0.22); feel.kick(4);
   for (const h of hunters) h.next = null; // sus rutas hacia tu antigua posición caducan
   tone({ type: 'sine', f0: 600, f1: 120, dur: 0.35, vol: 0.4 });
 }
@@ -1034,6 +1120,26 @@ function update(dt) {
   }
   moveGhost(dt);
   applyAtmosphere();
+  // Presentación (R7): cámara, luces diegéticas, partículas, postpro, audio reactivo.
+  feel.update(dt, NOW_SEC, { moving: ghostMoving, hunting });
+  ceiling.update(dt, NOW_SEC, hunting);
+  torches.update(hunters, pos, hunting, NOW_SEC);
+  dust.update(dt, pos);
+  bursts.update(dt);
+  post.set('hunt', hunting ? 1 : 0);
+  post.set('stun', stun > 0 ? 1 : 0);
+  post.set('mori', moriT > 0 ? 1 : 0);
+  document.body.classList.toggle('hunting', hunting);
+  if (actx) {
+    // Latido: en cacería, más rápido cuanto más cerca está la presa más próxima.
+    let dmin = Infinity;
+    for (const h of hunters) if (h.alive) dmin = Math.min(dmin, Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z));
+    const prox = hunting ? Math.max(0, 1 - dmin / 14) : 0;
+    if (prox > 0) { heartT -= dt; if (heartT <= 0) { heartbeat(); heartT = heartbeatInterval(prox); } }
+    else heartT = 0;
+    // Susurros aleatorios fuera de cacería: los Backrooms nunca callan del todo.
+    if (!hunting) { whisperT -= dt; if (whisperT <= 0) { whisper(); whisperT = 16 + Math.random() * 22; } }
+  }
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
   // Canalización: cuenta canalizadores en rango del altar; interrumpe si el
   // fantasma ruge cerca del altar durante la fase. En cacería el ritual se pausa.
@@ -1045,25 +1151,39 @@ function update(dt) {
     RIT.channelTick(ritual, nCh, dt, { interrupt: ghostNear });
   }
   syncRitualMeshes();
-  // Quita las mallas de trampas que ya caducaron en el estado puro.
+  // Trampas: anima el sello (giro + pulso) y quita las que caducaron en el estado puro.
   for (let i = trapMeshes.length - 1; i >= 0; i--) {
     const tm = trapMeshes[i];
-    if (!ab.traps.some((t) => t.gx === tm.gx && t.gz === tm.gz)) { scene.remove(tm.mesh); tm.mesh.geometry.dispose(); tm.mesh.material.dispose(); trapMeshes.splice(i, 1); }
+    if (!ab.traps.some((t) => t.gx === tm.gx && t.gz === tm.gz)) {
+      scene.remove(tm.mesh);
+      tm.mesh.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+      trapMeshes.splice(i, 1);
+      continue;
+    }
+    tm.mesh.rotation.y += dt * 0.7;
+    tm.inner.rotation.z -= dt * 1.6;   // el hexagrama contrarrota
+    const pulse = 0.35 + 0.2 * Math.sin(NOW_SEC * 3.5);
+    tm.outer.material.opacity = pulse + 0.15;
+    tm.inner.material.opacity = pulse;
   }
-  // Señuelo (Aparición): luz/sprite temporal; atrae y asusta a los cercanos.
+  // Señuelo (Aparición): wisp con luz propia; atrae y asusta a los cercanos.
   if (ab.decoy) {
     const [dwx, dwz] = worldOf(ab.decoy.gx, ab.decoy.gz);
     if (!decoyMesh) {
-      decoyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), new THREE.MeshBasicMaterial({ color: 0xc77dff, transparent: true, opacity: 0.7 }));
-      scene.add(decoyMesh);
+      decoyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), new THREE.MeshBasicMaterial({ color: 0xc77dff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
+      decoyLight = new THREE.PointLight(0xc77dff, 7, 8, 1.9);
+      scene.add(decoyMesh); scene.add(decoyLight);
     }
-    decoyMesh.position.set(dwx, EYE, dwz);
-    decoyMesh.material.opacity = 0.4 + 0.3 * Math.sin(performance.now() * 0.01);
+    const throb = 0.4 + 0.3 * Math.sin(performance.now() * 0.01);
+    decoyMesh.position.set(dwx, EYE + Math.sin(NOW_SEC * 1.7) * 0.15, dwz);   // levita
+    decoyMesh.material.opacity = throb;
+    decoyLight.position.copy(decoyMesh.position);
+    decoyLight.intensity = 4 + 6 * throb;
     for (const h of hunters) {
       if (!h.alive) continue;
       if (Math.hypot(h.pos.x - dwx, h.pos.z - dwz) < ABL.AB.SENSE_RANGE) { h.stress = Math.min(1, h.stress + 0.3 * dt); h.next = null; }
     }
-  } else if (decoyMesh) { scene.remove(decoyMesh); decoyMesh.geometry.dispose(); decoyMesh.material.dispose(); decoyMesh = null; }
+  } else if (decoyMesh) { scene.remove(decoyMesh); scene.remove(decoyLight); decoyMesh.geometry.dispose(); decoyMesh.material.dispose(); decoyMesh = null; decoyLight = null; }
   // Visión espectral: revela a los supervivientes a través de muros solo mientras
   // dure la habilidad (que solo se activa en cacería).
   const seeThrough = ab.spectral > 0;
@@ -1071,9 +1191,15 @@ function update(dt) {
   updateHUD(hunting); drawMinimap(); checkEnd();
 }
 let last = performance.now();
-function loop(now) { const dt = Math.min((now - last) / 1000, 0.05); last = now; update(dt); renderer.render(scene, camera); requestAnimationFrame(loop); }
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  update(dt);
+  post.update(dt, now / 1000);
+  post.render();
+  requestAnimationFrame(loop);
+}
 
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); post.setSize(innerWidth, innerHeight); });
 
 // ============================================================
 //  Arranque: preload -> colocar entorno -> hornear MAP -> mundo
@@ -1102,12 +1228,36 @@ async function boot() {
   console.log('REACH celdas transitables:', REACH.list.length);
   const [sx, sz] = clearSpawnCell();
   pos.set(sx * CELL, EYE, sz * CELL);
+  // Primer fotograma: mira hacia el interior del mapa, no a la pared del rincón.
+  const cxw = ((COLS - 1) * CELL) / 2, czw = ((ROWS - 1) * CELL) / 2;
+  yaw = Math.atan2(-(cxw - pos.x), -(czw - pos.z));
+
+  // Paneles fluorescentes del techo + narrativa ambiental del suelo (R7).
+  ceiling = buildCeilingLights(scene, { map: MAP, cols: COLS, rows: ROWS, cell: CELL, ceilY: TARGET_CEIL });
+  dressFloor(scene, REACH.list, CELL);
 
   rebuildMinimap();
   makeRitual(assets);
   makeHunters(assets && assets.chars);
   startBtn.textContent = 'CLICK PARA JUGAR';
   startBtn.disabled = false;
+
+  // Hook de depuración/verificación visual (solo con #dbg en la URL).
+  if (location.hash.includes('dbg')) {
+    window.__dbg = {
+      hide() { overlay.classList.add('hidden'); hud.classList.remove('hidden'); },
+      hunt() { startHunt(); },
+      endHunt() { endHunt(); },
+      tp(x, z) { pos.x = x; pos.z = z; },
+      look(y, p) { yaw = y; pitch = p; },
+      nearHunter(i = 0) {   // colócate a 4u del bot i mirándolo (verificación visual)
+        const h = hunters[i]; if (!h) return;
+        pos.x = h.pos.x + 4; pos.z = h.pos.z;
+        yaw = Math.PI / 2; pitch = 0;   // fwd = (-sin, -cos) -> (-1, 0): hacia el bot
+      },
+      state() { return { x: pos.x, z: pos.z, hunters: hunters.filter((h) => h.alive).length, hunting: hunt.active > 0 }; },
+    };
+  }
   requestAnimationFrame(loop);
 }
 boot();

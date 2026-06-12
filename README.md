@@ -3,7 +3,7 @@
 Mini-juego web de terror asimétrico en **primera persona** para la *Didáctico Jam 2026* (tema: **AL REVÉS**).
 Juegas como **fantasma** con los **controles de movimiento invertidos** y la **vista en negativo**, sobreviviendo a cazadores controlados por IA.
 
-> **Estado:** R6 — observación/marcado + derribo: marca observando (100% = kill de 1 golpe en cacería); sin marca, 2 golpes → KO → los compañeros reaniman si no estás cerca, o lo ejecutas con E (Memento Mori). Rutinas complementarias (reparadores + vigía + rescatador). Los que huyen ya nunca corren hacia ti.
+> **Estado:** R7 — presentación AAA: postprocesado cinematográfico (bloom + grano + viñeta + aberración + grading "el otro lado" en cacería), paneles fluorescentes de techo con flicker, linternas en los cazadores, screen-shake/head-bob/FOV dinámico, partículas (polvo, bursts), audio por capas (zumbido fluorescente que MUERE al empezar la cacería → rumble, latido por proximidad, susurros) y UI rediseñada (CRT/terror analógico). Sobre R6: observación/marcado + derribo/KO/Memento Mori + rutinas.
 
 ## El tema "AL REVÉS": inversión como evento (no constante)
 
@@ -52,7 +52,14 @@ Luego abre <http://localhost:8080> y haz click en **JUGAR**.
 
 - **Personajes:** Quaternius — *Ultimate Animated Character Pack* (CC0). <https://quaternius.com>
 - **Entorno:** `backrooms.glb` descargado de **Sketchfab** — _registrar autor + URL y verificar la licencia CC0/CC-BY del modelo concreto antes de publicar en itch.io._
+- **Props:** TV vintage, mesa y cruz de madera (Sketchfab) — _misma verificación de licencia pendiente._
 - **Música:** `freesound_community-dark-drone-ambient` (Freesound).
+- **Tipografías:** VT323 y Special Elite (Google Fonts, OFL).
+
+## Verificación visual (dev)
+
+`node scripts/shot.mjs` (con el servidor en `:8080` y Chrome instalado) abre el juego headless
+con `#dbg`, salta el overlay y captura PNGs en `shots/` (menú / normal / cacería / linternas).
 
 ## Licencia
 

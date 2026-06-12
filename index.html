@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ghost Hunters: Reversed — Prototipo</title>
+  <title>Ghost Hunters: Reversed</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Special+Elite&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 
   <!-- Three.js por importmap + CDN (sin build, sin node_modules).
@@ -18,6 +21,9 @@
   </script>
 </head>
 <body>
+  <!-- Textura CRT global (scanlines muy sutiles sobre el canvas, bajo el HUD) -->
+  <div id="filmfx"></div>
+
   <!-- Pantalla de inicio / captura de puntero -->
   <div id="overlay">
     <div class="overlay-card">
