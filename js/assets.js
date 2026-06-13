@@ -12,6 +12,9 @@ export const ENV_URL = 'assets/models/model-enviroment/source/backrooms.glb';
 export const OBJ_DIR = 'assets/models/objects/';
 export const RITUAL_SLOTS = ['mission', 'altar', 'cross'];
 
+// Avatar de la entidad (el jugador): monstruo Backrooms con animaciones.
+export const MONSTER_URL = 'assets/models/characters/MONSTER/accurate_backrooms_bacteria_v2_with_animations.glb';
+
 // Nombres exactos de archivo (con espacios) del pack de personajes.
 export const CHARACTER_FILES = [
   'Adventurer', 'Astronaut', 'Beach Character', 'Business Man', 'Casual Character',
@@ -34,6 +37,8 @@ export async function loadAllAssets(n, onProgress = () => {}) {
     ...RITUAL_SLOTS.map((s) => ({ key: s, url: OBJ_DIR + s + '.glb', optional: true })),
     // Linterna que llevan los investigadores (prop que se cuelga al rig de luz).
     { key: 'flashlight', url: OBJ_DIR + 'flashlight.glb', optional: true },
+    // Avatar-monstruo de la entidad (opcional: si falta, el fantasma es invisible).
+    { key: 'monster', url: MONSTER_URL, optional: true },
     ...chosen.map((name) => ({ key: name, url: charUrl(name) })),
   ];
   let done = 0;
@@ -50,7 +55,7 @@ export async function loadAllAssets(n, onProgress = () => {}) {
   return {
     env: results.env,
     mission: results.mission, altar: results.altar, cross: results.cross,
-    flashlight: results.flashlight,
+    flashlight: results.flashlight, monster: results.monster,
     chars: chosen.map((name) => ({ name, gltf: results[name] })),
   };
 }

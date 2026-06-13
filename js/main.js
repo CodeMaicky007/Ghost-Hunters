@@ -15,6 +15,7 @@ import { createPost, createCameraFeel, createDust, createBursts } from './fx.js'
 import { buildCeilingLights, createFlashlights } from './lights.js';
 import { dressFloor } from './setdress.js';
 import { buildMonitor, buildAltar, buildCross } from './propmodels.js';
+import { createGhostAvatar } from './ghostavatar.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
 import * as ABL from './abilities.js';
@@ -188,6 +189,9 @@ const bursts = createBursts(scene);
 const torches = createFlashlights(scene, 4);
 let ceiling = { update() {} };   // paneles fluorescentes; se construye en boot()
 let ghostMoving = false;         // lo fija moveGhost(); lo lee la sensación de cámara
+let ghostAvatar = null;          // monstruo-entidad (forma visible del fantasma); boot()
+// Corrección de encaje del frente del monstruo (su +Z local no es el frente "real").
+const AVATAR_FACE = Math.PI;
 
 // makeCanvas: usado por el minimapa.
 function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
@@ -878,6 +882,32 @@ function moveGhost(dt) {
   if (windGain) windGain.gain.setTargetAtTime(ghostMoving ? (hunt.active > 0 ? 0.03 : 0.02) : 0.0001, actx.currentTime, 0.25);
 }
 
+// Avatar de la entidad: en normal/cacería acecha JUSTO detrás de la cámara
+// (mirando hacia donde miras: lo atisbas al girar) y en el Memento Mori se
+// abalanza de frente con el JUMPSCARE. scareForce permite forzarlo (dbg).
+let scareForce = 0, avatarInspect = false, avFrames = 0;
+function updateGhostAvatar(dt, hunting) {
+  if (!ghostAvatar) return;
+  avFrames++;
+  ghostAvatar.update(dt);
+  if (scareForce > 0) scareForce -= dt;
+  const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  if (avatarInspect) {   // dbg: plantado de frente y posado (para verificación en GPU)
+    ghostAvatar.setPose(pos.x + fwd.x * 4, 0, pos.z + fwd.z * 4, Math.atan2(-fwd.x, -fwd.z) + AVATAR_FACE);
+    ghostAvatar.play('stalkingpose');
+    return;
+  }
+  if (moriT > 0 || scareForce > 0) {
+    const ax = pos.x + fwd.x * 2.3, az = pos.z + fwd.z * 2.3;        // delante de ti…
+    ghostAvatar.setPose(ax, 0, az, Math.atan2(-fwd.x, -fwd.z) + AVATAR_FACE);  // …de cara
+    if (ghostAvatar.hasClip('JUMPSCARE')) ghostAvatar.play('JUMPSCARE', { loop: false });
+  } else {
+    const ax = pos.x - fwd.x * 0.95, az = pos.z - fwd.z * 0.95;       // tras la cámara
+    ghostAvatar.setPose(ax, 0, az, Math.atan2(fwd.x, fwd.z) + AVATAR_FACE);
+    ghostAvatar.play(hunting && ghostAvatar.hasClip('chaseSceneEnd') ? 'chaseSceneEnd' : 'stalkingpose');
+  }
+}
+
 // Predicado de celda abierta para la IA (grid de IA, no el fino de colisión).
 const isOpenCell = (gx, gz) => !isWall(gx, gz);
 
@@ -1136,6 +1166,7 @@ function update(dt) {
   feel.update(dt, NOW_SEC, { moving: ghostMoving, hunting });
   ceiling.update(dt, NOW_SEC, hunting);
   torches.update(hunters, pos, hunting, NOW_SEC);
+  updateGhostAvatar(dt, hunting);
   dust.update(dt, pos);
   bursts.update(dt);
   post.set('hunt', hunting ? 1 : 0);
@@ -1251,6 +1282,7 @@ async function boot() {
   rebuildMinimap();
   makeRitual(assets);
   torches.setModel(assets && assets.flashlight);   // linterna GLB en la mano (si cargó)
+  ghostAvatar = createGhostAvatar(scene, assets && assets.monster);   // forma visible de la entidad
   makeHunters(assets && assets.chars);
   startBtn.textContent = 'CLICK PARA JUGAR';
   startBtn.disabled = false;
@@ -1277,6 +1309,10 @@ async function boot() {
       altar() { const [x, z] = worldOf(ritual.altar.gx, ritual.altar.gz); this.lookAt(x, 0.8, z, 2.2); },
       mission(i = 0) { const m = ritual.missions[i]; if (!m) return; const [x, z] = worldOf(m.gx, m.gz); this.lookAt(x, 0.7, z, 1.8); },
       cross(i = 0) { const o = ritual.objects[i]; if (!o) return; const [x, z] = worldOf(o.gx, o.gz); this.lookAt(x, 0.4, z, 1.3); },
+      scare() { scareForce = 2.5; },          // fuerza el JUMPSCARE del avatar de frente
+      turn() { yaw += Math.PI; },             // gira 180° (para ver al acechador a tu espalda)
+      avatarInfo() { if (!ghostAvatar) return 'NULL'; const b = new THREE.Box3().setFromObject(ghostAvatar.group); const sz = b.getSize(new THREE.Vector3()); return { meshes: ghostAvatar.meshCount, clips: ghostAvatar.clipNames, p: ghostAvatar.group.position.toArray().map((v) => +v.toFixed(2)), cam: [+pos.x.toFixed(2), +pos.z.toFixed(2)], frames: avFrames, size: sz.toArray().map((v) => +v.toFixed(2)) }; },
+      inspect() { avatarInspect = !avatarInspect; return avatarInspect; },
       state() { return { x: pos.x, z: pos.z, hunters: hunters.filter((h) => h.alive).length, hunting: hunt.active > 0 }; },
     };
   }
