@@ -120,8 +120,18 @@ export function createFlashlights(scene, k = 4) {
 
   const rigs = new Map();   // model -> { group, coneMat }
   const tmpPos = new THREE.Vector3(), tmpDir = new THREE.Vector3();
+  let flashTpl = null, flashScale = 1;   // modelo GLB de linterna (opcional)
 
   return {
+    // Cuelga un modelo real de linterna del rig (si no se llama, solo cono+lente).
+    setModel(gltf) {
+      if (!gltf || !gltf.scene) return;
+      const tpl = gltf.scene.clone(true);
+      tpl.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(tpl);
+      flashScale = 0.24 / Math.max(1e-3, box.max.y - box.min.y);   // ~24 cm de largo
+      flashTpl = tpl;
+    },
     attach(model) {
       const group = new THREE.Group();
       group.position.set(0.12, 1.32, 0.22);   // mano/altura del pecho, frente +Z
@@ -135,6 +145,13 @@ export function createFlashlights(scene, k = 4) {
       }));
       lens.scale.set(0.16, 0.16, 1);
       group.add(lens);
+      if (flashTpl) {
+        const fl = flashTpl.clone(true);
+        fl.scale.setScalar(flashScale);
+        fl.rotation.x = Math.PI / 2;     // eje +Y del modelo -> frente +Z
+        fl.position.set(0, -0.04, 0.02); // asentada en la mano, lente hacia delante
+        group.add(fl);
+      }
       model.root.add(group);
       rigs.set(model, { group, coneMat });
     },

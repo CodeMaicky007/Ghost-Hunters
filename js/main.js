@@ -1250,6 +1250,7 @@ async function boot() {
 
   rebuildMinimap();
   makeRitual(assets);
+  torches.setModel(assets && assets.flashlight);   // linterna GLB en la mano (si cargó)
   makeHunters(assets && assets.chars);
   startBtn.textContent = 'CLICK PARA JUGAR';
   startBtn.disabled = false;
@@ -1262,10 +1263,9 @@ async function boot() {
       endHunt() { endHunt(); },
       tp(x, z) { pos.x = x; pos.z = z; },
       look(y, p) { yaw = y; pitch = p; },
-      nearHunter(i = 0) {   // colócate a 4u del bot i mirándolo (verificación visual)
+      nearHunter(i = 0) {   // enfoca el torso del bot i desde el lado abierto (no contra el muro)
         const h = hunters[i]; if (!h) return;
-        pos.x = h.pos.x + 4; pos.z = h.pos.z;
-        yaw = Math.PI / 2; pitch = 0;   // fwd = (-sin, -cos) -> (-1, 0): hacia el bot
+        this.lookAt(h.pos.x, 1.3, h.pos.z, 2.2);
       },
       lookAt(tx, ty, tz, dist = 2.4) {   // mira un punto del mundo desde el lado del CENTRO (los props miran al centro)
         const cxw = ((COLS - 1) * CELL) / 2, czw = ((ROWS - 1) * CELL) / 2;

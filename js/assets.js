@@ -32,6 +32,8 @@ export async function loadAllAssets(n, onProgress = () => {}) {
     { key: 'env', url: ENV_URL },
     // Slots del ritual: opcionales (si no existe el .glb -> modelo procedural).
     ...RITUAL_SLOTS.map((s) => ({ key: s, url: OBJ_DIR + s + '.glb', optional: true })),
+    // Linterna que llevan los investigadores (prop que se cuelga al rig de luz).
+    { key: 'flashlight', url: OBJ_DIR + 'flashlight.glb', optional: true },
     ...chosen.map((name) => ({ key: name, url: charUrl(name) })),
   ];
   let done = 0;
@@ -48,6 +50,7 @@ export async function loadAllAssets(n, onProgress = () => {}) {
   return {
     env: results.env,
     mission: results.mission, altar: results.altar, cross: results.cross,
+    flashlight: results.flashlight,
     chars: chosen.map((name) => ({ name, gltf: results[name] })),
   };
 }
