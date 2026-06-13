@@ -321,27 +321,39 @@ function makeRitual(assets) {
   const objCells = cells.slice(1 + NUM_MISSIONS, 1 + NUM_MISSIONS + NUM_RITUAL_OBJECTS);
   ritual = RIT.createRitual(missionCells, objCells, [agx, agz], { NEED_CHANNELERS: 2 });
 
-  // Altar procedural (piedra desgastada). glowMat = sigilo emissive que la
-  // canalización ilumina (sustituye al GLB mesa.glb con pinta de prototipo).
-  { const a = buildAltar(); altarMesh = placeModel(a.root, awx, awz, true); altarMat = a.glowMat; }
+  // Altar: GLB drop-in (assets/models/objects/altar.glb) si existe; si no, altar
+  // procedural de piedra. altarMat = material emissive del brillo de canalización.
+  if (assets && assets.altar) {
+    altarMesh = placeProp(assets.altar, awx, awz, ALTAR_HEIGHT, true);
+    altarMesh.traverse((o) => { if (o.isMesh && !altarMat) altarMat = (Array.isArray(o.material) ? o.material[0] : o.material).clone(); });
+    altarMesh.traverse((o) => { if (o.isMesh) o.material = altarMat; });
+    if (altarMat) { altarMat.emissive = new THREE.Color(0x9d4edd); altarMat.emissiveIntensity = 0.1; }
+  } else {
+    const a = buildAltar(); altarMesh = placeModel(a.root, awx, awz, true); altarMat = a.glowMat;
+  }
   scene.add(altarMesh);
 
-  // Objetos rituales: cruz/reliquia procedural (madera + herraje + núcleo tenue).
+  // Objetos rituales: GLB drop-in (cross.glb) si existe; si no, cruz procedural.
   for (const o of ritual.objects) {
     const [wx, wz] = worldOf(o.gx, o.gz);
-    const mesh = placeModel(buildCross(), wx, wz, false);
+    const mesh = (assets && assets.cross) ? placeProp(assets.cross, wx, wz, OBJ_HEIGHT, false) : placeModel(buildCross(), wx, wz, false);
     scene.add(mesh);
     ritualMeshes.set(o.id, mesh);
   }
 
-  // Estaciones de misión = monitores CRT procedurales. screenMat = pantalla
-  // emissive (rojo averiado -> verde reparado), única por monitor: el sync de
-  // progreso solo toca ese material.
+  // Estaciones de misión: GLB drop-in (mission.glb) si existe; si no, CRT
+  // procedural. Material ÚNICO clonado por estación -> el sync de progreso (rojo
+  // averiado -> verde reparado) solo toca ese material.
   for (const m of ritual.missions) {
     const [wx, wz] = worldOf(m.gx, m.gz);
-    const mo = buildMonitor();
-    const mesh = placeModel(mo.root, wx, wz, true);
-    const mat = mo.screenMat;
+    let mesh, mat;
+    if (assets && assets.mission) {
+      mesh = placeProp(assets.mission, wx, wz, MISSION_HEIGHT, true);
+      mesh.traverse((o) => { if (o.isMesh && !mat) mat = (Array.isArray(o.material) ? o.material[0] : o.material).clone(); });
+      mesh.traverse((o) => { if (o.isMesh) o.material = mat; });
+    } else {
+      const mo = buildMonitor(); mesh = placeModel(mo.root, wx, wz, true); mat = mo.screenMat;
+    }
     scene.add(mesh); missionMeshes.set(m.id, { mesh, mat });
   }
 }

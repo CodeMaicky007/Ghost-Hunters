@@ -4,9 +4,13 @@ import { pickDistinct } from './logic.js';
 const loader = new GLTFLoader();
 
 export const ENV_URL = 'assets/models/model-enviroment/source/backrooms.glb';
-// Props del ritual (monitor/altar/cruz) ya NO se cargan de GLB: son modelos
-// procedurales con PBR propio en js/propmodels.js (R8). El entorno y los
-// personajes siguen siendo GLB.
+
+// Slots "drop-in" de objetos del ritual: si existe el .glb se usa tal cual; si
+// no (404), makeRitual cae al modelo procedural de js/propmodels.js. Así puedes
+// soltar un modelo (p. ej. de Sketchfab) en assets/models/objects/<slot>.glb y
+// el juego lo coge sin tocar código. Slots: mission / altar / cross.
+export const OBJ_DIR = 'assets/models/objects/';
+export const RITUAL_SLOTS = ['mission', 'altar', 'cross'];
 
 // Nombres exactos de archivo (con espacios) del pack de personajes.
 export const CHARACTER_FILES = [
@@ -26,16 +30,24 @@ export async function loadAllAssets(n, onProgress = () => {}) {
   const chosen = pickDistinct(CHARACTER_FILES, n);
   const jobs = [
     { key: 'env', url: ENV_URL },
+    // Slots del ritual: opcionales (si no existe el .glb -> modelo procedural).
+    ...RITUAL_SLOTS.map((s) => ({ key: s, url: OBJ_DIR + s + '.glb', optional: true })),
     ...chosen.map((name) => ({ key: name, url: charUrl(name) })),
   ];
   let done = 0;
   const results = {};
   await Promise.all(jobs.map(async (job) => {
-    results[job.key] = await loadGLB(job.url);
+    try {
+      results[job.key] = await loadGLB(job.url);
+    } catch (e) {
+      if (!job.optional) throw e;   // esenciales (entorno/personajes): propaga
+      results[job.key] = null;      // slot vacío -> makeRitual usa el procedural
+    }
     done++; onProgress(done / jobs.length);
   }));
   return {
     env: results.env,
+    mission: results.mission, altar: results.altar, cross: results.cross,
     chars: chosen.map((name) => ({ name, gltf: results[name] })),
   };
 }
