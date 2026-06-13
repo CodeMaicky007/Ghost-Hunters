@@ -14,7 +14,6 @@ import { HunterModel } from './hunters.js';
 import { createPost, createCameraFeel, createDust, createBursts } from './fx.js';
 import { buildCeilingLights, createFlashlights } from './lights.js';
 import { dressFloor } from './setdress.js';
-import { dressProps } from './props.js';
 import { buildMonitor, buildAltar, buildCross } from './propmodels.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
@@ -1236,9 +1235,6 @@ async function boot() {
   // Paneles fluorescentes del techo + narrativa ambiental del suelo (R7).
   ceiling = buildCeilingLights(scene, { map: MAP, cols: COLS, rows: ROWS, cell: CELL, ceilY: TARGET_CEIL });
   dressFloor(scene, REACH.list, CELL);
-  // Detalle industrial procedural (R8): tuberías, conductos, cajas, rejillas,
-  // señalética, ductos de techo, mobiliario y escombro — todo sobre muros/techo.
-  dressProps(scene, { map: MAP, cols: COLS, rows: ROWS, cell: CELL, reachList: REACH.list, ceilY: TARGET_CEIL });
 
   rebuildMinimap();
   makeRitual(assets);
