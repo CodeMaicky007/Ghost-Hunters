@@ -20,9 +20,9 @@ const GhostShader = {
   uniforms: {
     tDiffuse: { value: null },
     uTime: { value: 0 },
-    uVignette: { value: 0.55 },
-    uGrain: { value: 0.045 },
-    uAberr: { value: 0.0016 },
+    uVignette: { value: 0.5 },
+    uGrain: { value: 0.028 },
+    uAberr: { value: 0.001 },
     uHunt: { value: 0 },   // 0..1 — grading "el otro lado" (el fantasma ve en la oscuridad)
     uStun: { value: 0 },   // 0..1 — pulso rojo (parry / aturdido)
     uMori: { value: 0 },   // 0..1 — pulso oscuro de ejecución
@@ -52,22 +52,25 @@ const GhostShader = {
 
       // CACERÍA — "el otro lado": desatura, levanta sombras frías verdosas.
       // Es la visión espectral del fantasma: ve en lo que para otros es negro.
+      // Realce suave (1.18, antes 1.35): se ve en la penumbra sin lavar la imagen.
       float lum = dot(col, vec3(0.299, 0.587, 0.114));
       vec3 other = mix(vec3(lum), col, 0.3);
-      other = other * 1.35 + vec3(0.022, 0.065, 0.052);
+      other = other * 1.18 + vec3(0.016, 0.05, 0.042);
       col = mix(col, other, uHunt);
 
-      // Pulso rojo de stun y latido oscuro del mori, en los bordes.
+      // Pulso rojo de stun y latido oscuro del mori, en los bordes. Rojo más
+      // apagado y latido menos agresivo: avisa sin castigar la vista.
       float edge = smoothstep(0.12, 0.6, r2);
-      float beat = 0.55 + 0.45 * sin(uTime * 9.0);
-      col = mix(col, vec3(0.5, 0.03, 0.06), edge * clamp(uStun + uMori * 0.8, 0.0, 1.0) * beat);
+      float beat = 0.5 + 0.3 * sin(uTime * 9.0);
+      col = mix(col, vec3(0.34, 0.04, 0.05), edge * clamp(uStun + uMori * 0.8, 0.0, 1.0) * beat);
 
       // Viñeta.
       col *= 1.0 - uVignette * smoothstep(0.1, 0.72, r2);
 
-      // Grano de película (más denso en cacería).
+      // Grano de película (más denso en cacería, pero contenido: el grano
+      // excesivo titila y cansa la vista en partidas largas).
       float g = hash(vUv * vec2(917.13, 533.7));
-      col += (g - 0.5) * (uGrain + uHunt * 0.05 + uMori * 0.03);
+      col += (g - 0.5) * (uGrain + uHunt * 0.035 + uMori * 0.025);
 
       col += vec3(uFlash);
       gl_FragColor = vec4(col, 1.0);
@@ -78,7 +81,9 @@ const GhostShader = {
 export function createPost(renderer, scene, camera) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.38, 0.4, 0.85);
+  // Bloom suave: strength baja + radius alto + threshold alto -> halo difuso solo
+  // en los puntos realmente vivos (antes 0.38/0.4/0.85 inundaba la pantalla de glare).
+  const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.26, 0.5, 0.9);
   composer.addPass(bloom);
   const ghost = new ShaderPass(GhostShader);
   composer.addPass(ghost);
@@ -166,7 +171,7 @@ export function createDust(scene, count = 240, box = 16, height = 2.6) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
   const mat = new THREE.PointsMaterial({
-    map: softDotTexture(), size: 0.035, transparent: true, opacity: 0.5,
+    map: softDotTexture(), size: 0.03, transparent: true, opacity: 0.34,
     color: 0xfff3cf, depthWrite: false, blending: THREE.AdditiveBlending,
   });
   const pts = new THREE.Points(geo, mat);

@@ -12,8 +12,13 @@ import { pickPanelCells, spreadPicks, fluorFlicker } from './logic.js';
 const PANEL_STEP = 6;       // celdas entre paneles
 const NUM_LIGHTS = 6;       // PointLights reales (presupuesto de luces dinámicas)
 const FAULTY_RATE = 0.12;   // fracción de paneles "estropeados" que parpadean siempre
+const POINT_BASE = 11;      // intensidad base de cada PointLight (antes 22: quemaba)
 
-const WARM = new THREE.Color(0xfff3cb);
+// Confort visual: el panel es un tubo fluorescente, no un foco de soldadura. Un
+// crema cálido por debajo del blanco puro evita el "quemado" y el bloom-bomba que
+// fatigaban la vista en sesiones largas (el bloom solo lo coronan los píxeles más
+// vivos, ya no toda la tira). DEAD = casi negro en cacería.
+const WARM = new THREE.Color(0xc7b079);
 const DEAD = new THREE.Color(0x050607);
 const tmpC = new THREE.Color();
 
@@ -41,7 +46,7 @@ export function buildCeilingLights(scene, { map, cols, rows, cell, ceilY }) {
   // Pocas luces reales, lo más repartidas posible entre los paneles.
   const lightCells = spreadPicks(cells, NUM_LIGHTS);
   const lights = lightCells.map(([gx, gz], k) => {
-    const l = new THREE.PointLight(0xffe9b8, 22, 18, 1.9);
+    const l = new THREE.PointLight(0xffe9b8, POINT_BASE, 18, 2.0);
     l.position.set(gx * cell, ceilY - 0.35, gz * cell);
     l.userData.seed = k * 17.3 + 3.1;
     scene.add(l);
@@ -64,7 +69,7 @@ export function buildCeilingLights(scene, { map, cols, rows, cell, ceilY }) {
           inst.setColorAt(f.i, tmpC.copy(WARM).multiplyScalar(b));
         }
         if (faulty.length) inst.instanceColor.needsUpdate = true;
-        for (const l of lights) l.intensity = 22 * (0.92 + 0.08 * fluorFlicker(nowSec, l.userData.seed));
+        for (const l of lights) l.intensity = POINT_BASE * (0.92 + 0.08 * fluorFlicker(nowSec, l.userData.seed));
       } else {
         // Estertores: algún panel da chispazos moribundos muy de vez en cuando.
         for (const f of faulty) {
@@ -94,7 +99,7 @@ function lensTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-const CONE_LEN = 5.5, CONE_R = 0.95, SPOT_BASE = 26;
+const CONE_LEN = 5.5, CONE_R = 0.95, SPOT_BASE = 16, CONE_OPACITY = 0.05;
 const strobe = (t, seed) => {
   const h = Math.sin(Math.floor(t * 12) * 12.9898 + seed * 78.233) * 43758.5453;
   return (h - Math.floor(h)) > 0.72 ? 1 : 0;   // mayormente apagada, chispazos
@@ -121,7 +126,7 @@ export function createFlashlights(scene, k = 4) {
       const group = new THREE.Group();
       group.position.set(0.12, 1.32, 0.22);   // mano/altura del pecho, frente +Z
       const coneMat = new THREE.MeshBasicMaterial({
-        color: 0xffeec2, transparent: true, opacity: 0.065,
+        color: 0xffeec2, transparent: true, opacity: CONE_OPACITY,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
       });
       group.add(new THREE.Mesh(coneGeo, coneMat));
@@ -146,7 +151,7 @@ export function createFlashlights(scene, k = 4) {
         rig.group.visible = usable;
         if (!usable) continue;
         const on = hunting ? strobe(nowSec, h.id) : 1;   // en cacería: estroboscopia moribunda
-        rig.coneMat.opacity = 0.065 * on;
+        rig.coneMat.opacity = CONE_OPACITY * on;
         if (si < spots.length && active.indexOf(h) > -1 && active.indexOf(h) < spots.length) {
           const s = spots[si++];
           rig.group.getWorldPosition(tmpPos);

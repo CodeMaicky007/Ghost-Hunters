@@ -165,14 +165,16 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;   // curva fílmica: luces calientes, negros con cuerpo
-renderer.toneMappingExposure = 1.1;
+// Exposición por debajo de 1: ACES ya hace rolloff de altas luces; bajarla retira
+// el wash sobreexpuesto sin apagar la escena (confort visual en sesiones largas).
+renderer.toneMappingExposure = 0.95;
 renderer.domElement.id = 'game-canvas';
 document.body.appendChild(renderer.domElement);
 const canvasEl = renderer.domElement;
 
-const ambient = new THREE.AmbientLight(0xbda86a, 0.5);
+const ambient = new THREE.AmbientLight(0xb6a06a, 0.34);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0xbda86a, 0x191406, 0.35);
+const hemi = new THREE.HemisphereLight(0xb0a06a, 0x191406, 0.28);
 scene.add(hemi);
 const aura = new THREE.PointLight(0x9d4edd, 0.8, 12, 1.8);
 scene.add(aura);
@@ -366,13 +368,15 @@ function syncRitualMeshes() {
       mesh.position.set(wx, OBJ_HEIGHT / 2, wz);
     }
   }
-  // Brillo del altar crece con la canalización.
-  if (altarMat) altarMat.emissiveIntensity = 0.1 + (ritual.phase === RIT.PHASE.CHANNEL ? 1.2 * ritual.channel : 0);
-  // Monitores: rojo (averiado) -> verde (reparado) según progreso.
+  // Brillo del altar crece con la canalización (cap más bajo: el púrpura saturado
+  // a tope reventaba en bloom).
+  if (altarMat) altarMat.emissiveIntensity = 0.1 + (ritual.phase === RIT.PHASE.CHANNEL ? 0.8 * ritual.channel : 0);
+  // Monitores: rojo (averiado) -> verde (reparado) según progreso. Rojo menos puro
+  // y emisión más baja: dejan de ser un faro que deslumbra de cerca.
   for (const m of ritual.missions) {
     const mm = missionMeshes.get(m.id); if (!mm || !mm.mat) continue;
-    mm.mat.emissive.setRGB(1 - m.progress, 0.2 + 0.7 * m.progress, 0.2);
-    mm.mat.emissiveIntensity = 0.5 + 0.4 * m.progress;
+    mm.mat.emissive.setRGB(0.85 * (1 - m.progress), 0.2 + 0.6 * m.progress, 0.18);
+    mm.mat.emissiveIntensity = 0.3 + 0.3 * m.progress;
   }
 }
 
@@ -833,8 +837,8 @@ function drawMinimap() {
 function applyAtmosphere() {
   const lit = hunt.active <= 0;
   if (lit) {
-    ambient.color.setHex(0xbda86a); ambient.intensity = 0.5;
-    hemi.color.setHex(0xbda86a); hemi.groundColor.setHex(0x191406); hemi.intensity = 0.35;
+    ambient.color.setHex(0xb6a06a); ambient.intensity = 0.34;
+    hemi.color.setHex(0xb0a06a); hemi.groundColor.setHex(0x191406); hemi.intensity = 0.28;
     scene.fog.color.setHex(0x1c1808); scene.background.setHex(0x1c1808);
   } else {
     // "El otro lado": penumbra fría — los humanos no ven nada; tú ves siluetas.
@@ -861,7 +865,7 @@ function moveGhost(dt) {
   currentFloor = 0;
   pos.y = h + EYE; camera.position.copy(pos); camera.rotation.set(pitch, yaw, 0);
   aura.position.set(pos.x, h + EYE, pos.z);
-  aura.intensity = hunt.active > 0 ? 2.2 : 0.12; // invisible (tenue) en normal; en cacería te alumbra el paso
+  aura.intensity = hunt.active > 0 ? 1.7 : 0.12; // invisible (tenue) en normal; en cacería te alumbra el paso
   // Viento espectral ligado a tu movimiento (el fantasma fluye, no pisa).
   if (windGain) windGain.gain.setTargetAtTime(ghostMoving ? (hunt.active > 0 ? 0.03 : 0.02) : 0.0001, actx.currentTime, 0.25);
 }
@@ -1171,14 +1175,14 @@ function update(dt) {
     const [dwx, dwz] = worldOf(ab.decoy.gx, ab.decoy.gz);
     if (!decoyMesh) {
       decoyMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), new THREE.MeshBasicMaterial({ color: 0xc77dff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
-      decoyLight = new THREE.PointLight(0xc77dff, 7, 8, 1.9);
+      decoyLight = new THREE.PointLight(0xc77dff, 5, 8, 2.0);
       scene.add(decoyMesh); scene.add(decoyLight);
     }
     const throb = 0.4 + 0.3 * Math.sin(performance.now() * 0.01);
     decoyMesh.position.set(dwx, EYE + Math.sin(NOW_SEC * 1.7) * 0.15, dwz);   // levita
     decoyMesh.material.opacity = throb;
     decoyLight.position.copy(decoyMesh.position);
-    decoyLight.intensity = 4 + 6 * throb;
+    decoyLight.intensity = 3 + 3.5 * throb;
     for (const h of hunters) {
       if (!h.alive) continue;
       if (Math.hypot(h.pos.x - dwx, h.pos.z - dwz) < ABL.AB.SENSE_RANGE) { h.stress = Math.min(1, h.stress + 0.3 * dt); h.next = null; }
