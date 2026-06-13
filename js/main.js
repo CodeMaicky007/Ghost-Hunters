@@ -15,6 +15,7 @@ import { createPost, createCameraFeel, createDust, createBursts } from './fx.js'
 import { buildCeilingLights, createFlashlights } from './lights.js';
 import { dressFloor } from './setdress.js';
 import { dressProps } from './props.js';
+import { buildMonitor, buildAltar, buildCross } from './propmodels.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
 import * as ABL from './abilities.js';
@@ -281,6 +282,17 @@ let altarMesh = null, altarMat = null;
 const OBJ_HEIGHT = 0.6;            // alto objetivo del objeto ritual en mundo
 const ALTAR_HEIGHT = 0.9;         // alto objetivo del altar
 
+// Coloca un modelo procedural (ya construido a tamaño final, base en y=0,
+// frente +Z) sobre (wx,wz); opcionalmente lo gira para mirar al centro del nivel.
+function placeModel(root, wx, wz, faceCenter) {
+  if (faceCenter) {
+    const cxw = ((COLS - 1) * CELL) / 2, czw = ((ROWS - 1) * CELL) / 2;
+    root.rotation.y = Math.atan2(cxw - wx, czw - wz);
+  }
+  root.position.set(wx, 0, wz);
+  return root;
+}
+
 // Escala un GLB clonado a `targetH` midiendo su caja y lo apoya en y=0 sobre (wx,wz).
 function placeProp(gltf, wx, wz, targetH, faceCenter) {
   const mesh = gltf.scene.clone(true);
@@ -310,43 +322,27 @@ function makeRitual(assets) {
   const objCells = cells.slice(1 + NUM_MISSIONS, 1 + NUM_MISSIONS + NUM_RITUAL_OBJECTS);
   ritual = RIT.createRitual(missionCells, objCells, [agx, agz], { NEED_CHANNELERS: 2 });
 
-  // Altar (mesa) con material propio para el brillo de canalización.
-  if (assets && assets.altar) {
-    altarMesh = placeProp(assets.altar, awx, awz, ALTAR_HEIGHT, true);
-    altarMesh.traverse((o) => { if (o.isMesh && !altarMat) { altarMat = (Array.isArray(o.material) ? o.material[0] : o.material).clone(); } });
-    altarMesh.traverse((o) => { if (o.isMesh) o.material = altarMat; });
-    if (altarMat) { altarMat.emissive = new THREE.Color(0x9d4edd); altarMat.emissiveIntensity = 0.1; }
-  } else {
-    altarMat = new THREE.MeshStandardMaterial({ color: 0x3a2a4a, emissive: 0x9d4edd, emissiveIntensity: 0.1 });
-    altarMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.2), altarMat); altarMesh.position.set(awx, 0.45, awz);
-  }
+  // Altar procedural (piedra desgastada). glowMat = sigilo emissive que la
+  // canalización ilumina (sustituye al GLB mesa.glb con pinta de prototipo).
+  { const a = buildAltar(); altarMesh = placeModel(a.root, awx, awz, true); altarMat = a.glowMat; }
   scene.add(altarMesh);
 
-  // Objetos rituales (cruces).
+  // Objetos rituales: cruz/reliquia procedural (madera + herraje + núcleo tenue).
   for (const o of ritual.objects) {
     const [wx, wz] = worldOf(o.gx, o.gz);
-    let mesh;
-    if (assets && assets.cross) mesh = placeProp(assets.cross, wx, wz, OBJ_HEIGHT, false);
-    else { mesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, OBJ_HEIGHT, 0.3), new THREE.MeshStandardMaterial({ color: 0xd8c089, emissive: 0x7a5a20, emissiveIntensity: 0.4 })); mesh.position.set(wx, OBJ_HEIGHT / 2, wz); }
+    const mesh = placeModel(buildCross(), wx, wz, false);
     scene.add(mesh);
     ritualMeshes.set(o.id, mesh);
   }
 
-  // Estaciones de misión = monitores (reusa el TV GLB; respaldo caja).
+  // Estaciones de misión = monitores CRT procedurales. screenMat = pantalla
+  // emissive (rojo averiado -> verde reparado), única por monitor: el sync de
+  // progreso solo toca ese material.
   for (const m of ritual.missions) {
     const [wx, wz] = worldOf(m.gx, m.gz);
-    let mesh, mat;
-    if (assets && assets.tv) {
-      mesh = placeProp(assets.tv, wx, wz, MISSION_HEIGHT, true);
-      // Material ÚNICO clonado por estación (a propósito): el TV comparte un material
-      // emissive y así el sync de progreso solo toca un mat por monitor.
-      mesh.traverse((o) => { if (o.isMesh && !mat) mat = (Array.isArray(o.material) ? o.material[0] : o.material).clone(); });
-      mesh.traverse((o) => { if (o.isMesh) o.material = mat; });
-    } else {
-      mat = new THREE.MeshStandardMaterial({ color: 0x222633, emissive: 0xff3333, emissiveIntensity: 0.6 });
-      mesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, MISSION_HEIGHT, 0.5), mat); mesh.position.set(wx, MISSION_HEIGHT / 2, wz);
-    }
-    if (mat) { mat.emissive = new THREE.Color(0xff3333); mat.emissiveIntensity = 0.6; }
+    const mo = buildMonitor();
+    const mesh = placeModel(mo.root, wx, wz, true);
+    const mat = mo.screenMat;
     scene.add(mesh); missionMeshes.set(m.id, { mesh, mat });
   }
 }
@@ -1263,6 +1259,16 @@ async function boot() {
         pos.x = h.pos.x + 4; pos.z = h.pos.z;
         yaw = Math.PI / 2; pitch = 0;   // fwd = (-sin, -cos) -> (-1, 0): hacia el bot
       },
+      lookAt(tx, ty, tz, dist = 2.4) {   // mira un punto del mundo desde el lado del CENTRO (los props miran al centro)
+        const cxw = ((COLS - 1) * CELL) / 2, czw = ((ROWS - 1) * CELL) / 2;
+        let ox = cxw - tx, oz = czw - tz; const ol = Math.hypot(ox, oz) || 1; ox /= ol; oz /= ol;
+        pos.x = tx + ox * dist; pos.z = tz + oz * dist; pos.y = EYE;
+        const dx = tx - pos.x, dz = tz - pos.z, dy = (ty || 0.7) - pos.y;
+        yaw = Math.atan2(-dx, -dz); pitch = Math.atan2(dy, Math.hypot(dx, dz));
+      },
+      altar() { const [x, z] = worldOf(ritual.altar.gx, ritual.altar.gz); this.lookAt(x, 0.8, z, 2.2); },
+      mission(i = 0) { const m = ritual.missions[i]; if (!m) return; const [x, z] = worldOf(m.gx, m.gz); this.lookAt(x, 0.7, z, 1.8); },
+      cross(i = 0) { const o = ritual.objects[i]; if (!o) return; const [x, z] = worldOf(o.gx, o.gz); this.lookAt(x, 0.4, z, 1.3); },
       state() { return { x: pos.x, z: pos.z, hunters: hunters.filter((h) => h.alive).length, hunting: hunt.active > 0 }; },
     };
   }
