@@ -1,23 +1,21 @@
 # Objetos del ritual — slots "drop-in"
 
-El juego carga estos 3 objetos desde aquí **si existe el archivo**; si no, usa un
-modelo procedural de respaldo (`js/propmodels.js`). No hay que tocar código: deja
-el `.glb` con el nombre exacto y al recargar se usa.
+El juego mapea cada objeto del ritual a un archivo GLB real (o a un modelo
+procedural de respaldo). El mapeo está en `js/assets.js` -> `SLOT_FILES`:
 
-| Archivo            | Qué es en el juego                         | Respaldo procedural |
-|--------------------|--------------------------------------------|---------------------|
-| `mission.glb`      | Estación de misión (monitor que apagan)    | CRT con pantalla emissive |
-| `altar.glb`        | Altar del ritual (brilla al canalizar)     | Altar de piedra + sigilo |
-| `cross.glb`        | Reliquia que los supervivientes acarrean   | Cruz de madera |
+| Slot      | Archivo actual                          | Qué es / respaldo procedural |
+|-----------|-----------------------------------------|------------------------------|
+| `mission` | `proyecto_final_televisor_entrega.glb`  | Monitor/TV que los investigadores apagan (pantalla con tinte de progreso) |
+| `altar`   | *(null)*                                | Altar procedural de piedra + sigilo |
+| `cross`   | *(null)*                                | Cruz procedural de madera |
 
-## Cómo añadir uno (p. ej. de Sketchfab)
+## Cómo añadir/cambiar un objeto (p. ej. de Sketchfab)
 
-1. Descarga el modelo en **GLB** (un solo archivo, con texturas embebidas — es lo
-   más cómodo). También vale una carpeta `.gltf` + `.bin` + `texturas`, pero
-   entonces el `.gltf` debe llamarse igual que el slot y referenciar bien sus
-   rutas relativas.
-2. Renómbralo a `mission.glb` / `altar.glb` / `cross.glb` y déjalo en esta carpeta.
-3. Recarga el juego. Yo ajusto después escala/orientación/material si hace falta.
+1. Descarga el modelo en **GLB** (un solo archivo con texturas embebidas — lo más
+   cómodo) y déjalo en esta carpeta.
+2. Apunta el slot a tu archivo en `SLOT_FILES` (o dime el nombre y lo cableo yo).
+3. Recarga. Yo ajusto escala/orientación/material si hace falta (el frente debe
+   mirar a +Z; la escala se normaliza por altura).
 
 ### Notas de integración (lo que hago yo al recibirlos)
 - **Escala**: se escala midiendo la altura (Box3) hasta la altura objetivo del
