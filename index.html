@@ -79,5 +79,22 @@
   </div>
 
   <script type="module" src="js/main.js"></script>
+  <!-- Guarda: abrir por file:// bloquea los módulos ES y el juego nunca carga.
+       Este script clásico SÍ corre en file:// y avisa de cómo arrancarlo bien. -->
+  <script>
+    if (location.protocol === 'file:') addEventListener('DOMContentLoaded', () => {
+      const b = document.getElementById('startBtn');
+      if (b) { b.textContent = '⚠ ABRE CON UN SERVIDOR LOCAL'; b.disabled = true; }
+      const card = document.querySelector('.overlay-card');
+      if (card) {
+        const p = document.createElement('p');
+        p.className = 'warn';
+        p.innerHTML = 'No funciona abriendo el archivo directamente (<code>file://</code>).<br>'
+          + 'Arranca un servidor en la carpeta del proyecto: <code>npm run dev</code><br>'
+          + 'y abre <strong>http://localhost:8080</strong>';
+        card.appendChild(p);
+      }
+    });
+  </script>
 </body>
 </html>

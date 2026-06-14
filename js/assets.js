@@ -28,6 +28,12 @@ export function loadGLB(url) {
   return new Promise((resolve, reject) => loader.load(url, resolve, undefined, reject));
 }
 
+// Da por nulo un load que tarde demasiado: un asset opcional lento/colgado NUNCA
+// debe bloquear el arranque del juego.
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((res) => setTimeout(() => res(null), ms))]);
+}
+
 // Carga el entorno + n personajes distintos. onProgress(fraction 0..1).
 // Esenciales (entorno + personajes): si fallan, se propaga el error y boot()
 // usa el entorno procedural completo.
@@ -50,7 +56,8 @@ export async function loadAllAssets(n, onProgress = () => {}) {
   const results = {};
   await Promise.all(jobs.map(async (job) => {
     try {
-      results[job.key] = await loadGLB(job.url);
+      const load = loadGLB(job.url);
+      results[job.key] = job.optional ? await withTimeout(load, 20000) : await load;
     } catch (e) {
       if (!job.optional) throw e;   // esenciales (entorno/personajes): propaga
       results[job.key] = null;      // slot vacío -> makeRitual usa el procedural
