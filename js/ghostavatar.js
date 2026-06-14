@@ -1,29 +1,32 @@
 // ============================================================
 //  Avatar de LA ENTIDAD (R8): el monstruo Backrooms es la forma
-//  visible del fantasma que controla el jugador. En primera persona
-//  acecha tras la cámara (lo atisbas al girar; los investigadores
-//  huyen de él) y se abalanza en pantalla (JUMPSCARE) en el Mori.
+//  visible del fantasma que controla el jugador. Va con el jugador
+//  (los investigadores huyen de él) y se abalanza en pantalla
+//  (JUMPSCARE) en el Mori.
 //
-//  El GLB viene casi negro y sin texturas -> se le da un realce
-//  espectral (base levantada + emissive frío translúcido) para que
-//  se lea en la penumbra sin romper el confort visual de R8.
+//  El GLB viene casi negro y sin texturas -> realce espectral. Y se
+//  mide/centra por los HUESOS del esqueleto, no por Box3 del mesh:
+//  en un SkinnedMesh el Box3 da la talla del bind-pose (mentira),
+//  por eso antes salía diminuto. Los huesos dan la talla real posada.
 // ============================================================
 import * as THREE from 'three';
 
 const asArr = (m) => (Array.isArray(m) ? m : [m]);
 
+// Caja que abarca las posiciones de mundo de TODOS los huesos (talla real posada).
+function skeletonBox(root) {
+  const box = new THREE.Box3(); const v = new THREE.Vector3(); let found = false;
+  root.traverse((o) => {
+    if (o.isSkinnedMesh && o.skeleton) for (const b of o.skeleton.bones) { b.getWorldPosition(v); box.expandByPoint(v); found = true; }
+  });
+  return found ? box : null;
+}
+
 export function createGhostAvatar(scene, gltf, { height = 2.6 } = {}) {
   if (!gltf || !gltf.scene) return null;
   const root = gltf.scene;
 
-  // Escala a una altura amenazante midiendo su caja.
-  root.updateMatrixWorld(true);
-  let box = new THREE.Box3().setFromObject(root);
-  root.scale.setScalar(height / Math.max(1e-3, box.max.y - box.min.y));
-  root.updateMatrixWorld(true);
-
-  // Realce espectral: levanta la base (casi negra) y añade emissive frío tenue;
-  // ligera translucidez para sensación fantasmal. depthWrite off para no recortar.
+  // Realce: levanta el material (casi negro), pálido y algo emissive frío.
   let meshCount = 0;
   root.traverse((o) => {
     if (!o.isMesh || !o.material) return;
@@ -32,24 +35,17 @@ export function createGhostAvatar(scene, gltf, { height = 2.6 } = {}) {
     o.castShadow = o.receiveShadow = false;
     o.frustumCulled = false;
     for (const m of asArr(o.material)) {
-      m.color = new THREE.Color(0x6a6470);
-      m.emissive = new THREE.Color(0x4a5a72);
-      m.emissiveIntensity = 0.7;
+      m.color = new THREE.Color(0x8c8a93);
+      m.emissive = new THREE.Color(0x394a63);
+      m.emissiveIntensity = 0.55;
       m.roughness = 0.85; m.metalness = 0.0;
       m.side = THREE.DoubleSide;
-      m.transparent = true; m.opacity = 0.92; m.depthWrite = true;
+      m.transparent = true; m.opacity = 0.95; m.depthWrite = true;
     }
   });
 
-  // Centra el modelo en XZ y apoya su base en y=0 dentro de un grupo (el grupo se
-  // mueve/gira; el mixer anima los huesos dentro).
   const group = new THREE.Group();
   group.add(root);
-  root.updateMatrixWorld(true);
-  box = new THREE.Box3().setFromObject(root);
-  root.position.x -= (box.min.x + box.max.x) / 2;
-  root.position.z -= (box.min.z + box.max.z) / 2;
-  root.position.y -= box.min.y;
   group.visible = false;
   scene.add(group);
 
@@ -64,7 +60,22 @@ export function createGhostAvatar(scene, gltf, { height = 2.6 } = {}) {
     cache[name] = c ? mixer.clipAction(c) : null;
     return cache[name];
   };
-  let current = null, currentName = '';
+
+  // Posa el rig (la bind-pose puede estar colapsada) y MIDE POR HUESOS para
+  // escalar a `height` y centrar/apoyar en y=0. Recalcula tras escalar.
+  const poseName = clips.stalkingpose ? 'stalkingpose' : (clips.TposeLifeform ? 'TposeLifeform' : Object.keys(clips)[0]);
+  if (poseName) { const a = action(poseName); if (a) a.play(); }
+  mixer.update(0.3);
+  group.updateMatrixWorld(true);
+  let bbox = skeletonBox(root) || new THREE.Box3().setFromObject(root);
+  root.scale.multiplyScalar(height / Math.max(1e-3, bbox.max.y - bbox.min.y));
+  group.updateMatrixWorld(true);
+  bbox = skeletonBox(root) || new THREE.Box3().setFromObject(root);
+  root.position.x -= (bbox.min.x + bbox.max.x) / 2;
+  root.position.z -= (bbox.min.z + bbox.max.z) / 2;
+  root.position.y -= bbox.min.y;
+
+  let current = null, currentName = poseName || '';
   function play(name, { loop = true } = {}) {
     if (currentName === name) return;
     const act = action(name) || action('stalkingpose') || action(Object.keys(clips)[0]);

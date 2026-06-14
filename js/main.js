@@ -192,6 +192,7 @@ let ceiling = { update() {} };   // paneles fluorescentes; se construye en boot(
 let ghostMoving = false;         // lo fija moveGhost(); lo lee la sensación de cámara
 let ghostAvatar = null;          // monstruo-entidad (forma visible del fantasma); boot()
 let loungeCenter = null;         // centro de mundo de la sala temática; boot()
+let thirdPerson = false;         // V: cámara a tu espalda -> te ves como el monstruo
 // Corrección de encaje del frente del monstruo (su +Z local no es el frente "real").
 const AVATAR_FACE = Math.PI;
 
@@ -738,6 +739,7 @@ addEventListener('keydown', (e) => {
   // Pruebas del avatar-monstruo SIN consola (mientras juegas):
   else if (e.code === 'KeyM') { avatarInspect = !avatarInspect; }  // M = planta el monstruo delante
   else if (e.code === 'KeyN') { scareForce = 2.5; }                // N = dispara el JUMPSCARE
+  else if (e.code === 'KeyV') { thirdPerson = !thirdPerson; }      // V = 3ª persona (te ves como el monstruo)
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('mousedown', (e) => { if (e.button === 0 && document.pointerLockElement === canvasEl) selectObserveTarget(); });
@@ -896,7 +898,15 @@ function moveGhost(dt) {
   }
   const h = groundHeight();
   currentFloor = 0;
-  pos.y = h + EYE; camera.position.copy(pos); camera.rotation.set(pitch, yaw, 0);
+  pos.y = h + EYE;
+  camera.rotation.set(pitch, yaw, 0);
+  if (thirdPerson) {
+    // Cámara a tu espalda mirando al frente: te VES como el monstruo.
+    const back = 3.4, up = 0.9;
+    camera.position.set(pos.x + Math.sin(yaw) * back, pos.y + up - Math.sin(pitch) * back, pos.z + Math.cos(yaw) * back);
+  } else {
+    camera.position.copy(pos);
+  }
   aura.position.set(pos.x, h + EYE, pos.z);
   aura.intensity = hunt.active > 0 ? 1.7 : 0.12; // invisible (tenue) en normal; en cacería te alumbra el paso
   // Viento espectral ligado a tu movimiento (el fantasma fluye, no pisa).
@@ -913,19 +923,19 @@ function updateGhostAvatar(dt, hunting) {
   ghostAvatar.update(dt);
   if (scareForce > 0) scareForce -= dt;
   const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-  if (avatarInspect) {   // dbg: plantado de frente y posado (para verificación en GPU)
+  const anim = () => ghostAvatar.play(hunting && ghostAvatar.hasClip('chaseSceneEnd') ? 'chaseSceneEnd' : 'stalkingpose');
+  if (avatarInspect) {   // M: plantado de frente y posado (verificación)
     ghostAvatar.setPose(pos.x + fwd.x * 4, 0, pos.z + fwd.z * 4, Math.atan2(-fwd.x, -fwd.z) + AVATAR_FACE);
-    ghostAvatar.play('stalkingpose');
-    return;
-  }
-  if (moriT > 0 || scareForce > 0) {
-    const ax = pos.x + fwd.x * 2.3, az = pos.z + fwd.z * 2.3;        // delante de ti…
-    ghostAvatar.setPose(ax, 0, az, Math.atan2(-fwd.x, -fwd.z) + AVATAR_FACE);  // …de cara
+    anim();
+  } else if (moriT > 0 || scareForce > 0) {   // JUMPSCARE de frente
+    ghostAvatar.setPose(pos.x + fwd.x * 2.3, 0, pos.z + fwd.z * 2.3, Math.atan2(-fwd.x, -fwd.z) + AVATAR_FACE);
     if (ghostAvatar.hasClip('JUMPSCARE')) ghostAvatar.play('JUMPSCARE', { loop: false });
-  } else {
-    const ax = pos.x - fwd.x * 0.95, az = pos.z - fwd.z * 0.95;       // tras la cámara
-    ghostAvatar.setPose(ax, 0, az, Math.atan2(fwd.x, fwd.z) + AVATAR_FACE);
-    ghostAvatar.play(hunting && ghostAvatar.hasClip('chaseSceneEnd') ? 'chaseSceneEnd' : 'stalkingpose');
+  } else if (thirdPerson) {   // V: ERES el monstruo -> en TU posición, mirando al frente
+    ghostAvatar.setPose(pos.x, 0, pos.z, yaw + AVATAR_FACE);
+    anim();
+  } else {   // 1ª persona: acecha justo tras la cámara (lo ves al girar)
+    ghostAvatar.setPose(pos.x - fwd.x * 0.95, 0, pos.z - fwd.z * 0.95, Math.atan2(fwd.x, fwd.z) + AVATAR_FACE);
+    anim();
   }
 }
 
