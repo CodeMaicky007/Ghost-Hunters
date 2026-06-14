@@ -52,8 +52,10 @@ Luego abre <http://localhost:8080> y haz click en **JUGAR**.
 
 - **Personajes:** Quaternius — *Ultimate Animated Character Pack* (CC0). <https://quaternius.com>
 - **Entorno:** `backrooms.glb` descargado de **Sketchfab** — _registrar autor + URL y verificar la licencia CC0/CC-BY del modelo concreto antes de publicar en itch.io._
-- **Props:** TV vintage, mesa y cruz de madera (Sketchfab) — _misma verificación de licencia pendiente._
+- **Props/objetos:** TV de misión, linterna, sillón y sillas (Sketchfab) — _registrar autor + URL y verificar licencia antes de publicar._ Altar y cruz son procedurales (`js/propmodels.js`).
+- **Entidad:** monstruo Backrooms con animaciones (Sketchfab) — _verificación de licencia pendiente._
 - **Música:** `freesound_community-dark-drone-ambient` (Freesound).
+- **Sonidos de la entidad:** *Entity sounds by juanjo_sound* (Backrooms Entity SFX Vol. 1 — uso libre comercial; no redistribuir como pack).
 - **Tipografías:** VT323 y Special Elite (Google Fonts, OFL).
 
 ## Verificación visual (dev)

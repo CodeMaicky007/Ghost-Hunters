@@ -204,7 +204,7 @@ function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width 
 let actx = null, master = null, musicEl = null;
 let senseOsc = null, senseGain = null;
 let humGain = null, rumbleGain = null, windGain = null;   // capas ambientales (R7)
-let heartT = 0, whisperT = 14;                            // temporizadores latido/susurros
+let heartT = 0, whisperT = 14, growlT = 4;               // temporizadores latido/susurros/gruñidos
 function noiseBuffer(seconds = 2) {
   const b = actx.createBuffer(1, actx.sampleRate * seconds, actx.sampleRate);
   const d = b.getChannelData(0);
@@ -214,6 +214,7 @@ function noiseBuffer(seconds = 2) {
 function initAudio() {
   if (actx) return;
   actx = new (window.AudioContext || window.webkitAudioContext)();
+  entitySfx.ensure();   // precarga los WAV de la entidad (ya hay gesto del usuario)
   master = actx.createGain(); master.gain.value = 0.6; master.connect(actx.destination);
   senseOsc = actx.createOscillator(); senseGain = actx.createGain();
   senseOsc.type = 'sine'; senseOsc.frequency.value = 54; senseGain.gain.value = 0.0001;
@@ -261,6 +262,21 @@ function whisper() {
 }
 function startMusic() { if (musicEl) return; musicEl = new Audio('assets/music/freesound_community-dark-drone-ambient-66071.mp3'); musicEl.loop = true; musicEl.volume = 0.4; musicEl.play().catch(() => {}); }
 function duckMusic(down) { if (musicEl) musicEl.volume = down ? 0.1 : 0.4; }
+
+// Sonidos de LA ENTIDAD (juanjo_sound — uso libre; "Entity sounds by juanjo_sound").
+// Elegidos por análisis (dur/pico): rugido = #16, jumpscare = #19, gruñidos = #4/#14/#23.
+const entityFile = (n) => encodeURI('assets/music/Monster sounds/juanjo_sound - Backrooms Entity ' + n + '.wav');
+const entitySfx = (() => {
+  let roarA = null, jumpA = null, growls = [];
+  const mk = (n, v) => { const a = new Audio(entityFile(n)); a.volume = v; a.preload = 'auto'; return a; };
+  const play = (a) => { if (!a) return; try { a.currentTime = 0; a.play().catch(() => {}); } catch { /* gesto */ } };
+  return {
+    ensure() { if (roarA) return; roarA = mk(16, 0.7); jumpA = mk(19, 0.9); growls = [mk(4, 0.4), mk(14, 0.4), mk(23, 0.4)]; },
+    roar() { this.ensure(); play(roarA); },
+    jumpscare() { this.ensure(); play(jumpA); },
+    growl() { this.ensure(); play(growls[Math.floor(Math.random() * growls.length)]); },
+  };
+})();
 function tone({ type = 'sine', f0, f1, dur, vol = 0.3, at = 0 }) {
   if (!actx) return; const t = actx.currentTime + at;
   const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
@@ -733,7 +749,7 @@ const VISION_R = AIB.AI.VISION_RADIUS;
 let coordTimer = 0;           // acumulador para correr el coordinador a baja Hz
 const COORD_PERIOD = 1.2;     // s entre reasignaciones de rol
 let DISPERSAL = null;
-function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); duckMusic(true); setHuntAudio(true); feel.addTrauma(0.55); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
+function startHunt() { hunt.active = ABL.AB.HUNT_DUR; sfx.roar(); entitySfx.roar(); duckMusic(true); setHuntAudio(true); feel.addTrauma(0.55); { const [gx, gz] = cellOf(pos.x, pos.z); AIB.addEvent(BB, 'hunt', gx, gz, GAME.timeLeft, AIB.AI.EVENT_DANGER); }
   for (const h of hunters) if (h.alive && !h.ko) { h.parryUsed = false; h.lives = LIVES_UNMARKED; h.hitCd = 0; } // los KO no recuperan vidas: revividos = 1 // parry + vidas por cacería
 }
 function endHunt() { hunt.active = 0; duckMusic(false); setHuntAudio(false); for (const h of hunters) if (h.alive) h.model.setSpectral(false); }
@@ -1085,7 +1101,7 @@ function tryMori() {
   if (stun > 0 || moriT > 0) return;
   for (const h of hunters) {
     if (!h.alive || !h.ko) continue;
-    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= MORI_RANGE) { moriT = MORI_TIME; moriTarget = h; sfx.mori(); return; }
+    if (Math.hypot(h.pos.x - pos.x, h.pos.z - pos.z) <= MORI_RANGE) { moriT = MORI_TIME; moriTarget = h; sfx.mori(); entitySfx.jumpscare(); return; }
   }
 }
 
@@ -1184,6 +1200,8 @@ function update(dt) {
     else heartT = 0;
     // Susurros aleatorios fuera de cacería: los Backrooms nunca callan del todo.
     if (!hunting) { whisperT -= dt; if (whisperT <= 0) { whisper(); whisperT = 16 + Math.random() * 22; } }
+    // Gruñidos de la entidad durante la cacería (la criatura ronda en la oscuridad).
+    if (hunting) { growlT -= dt; if (growlT <= 0) { entitySfx.growl(); growlT = 5 + Math.random() * 5; } } else growlT = 4;
   }
   for (const h of hunters) updateHunter(h, dt, pos, hunting, currentFloor === 0);
   // Canalización: cuenta canalizadores en rango del altar; interrumpe si el
