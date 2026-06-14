@@ -16,6 +16,7 @@ import { buildCeilingLights, createFlashlights } from './lights.js';
 import { dressFloor } from './setdress.js';
 import { buildMonitor, buildAltar, buildCross } from './propmodels.js';
 import { createGhostAvatar } from './ghostavatar.js';
+import { placeLounge } from './lounge.js';
 import * as AIB from './ai.js';
 import * as RIT from './ritual.js';
 import * as ABL from './abilities.js';
@@ -190,6 +191,7 @@ const torches = createFlashlights(scene, 4);
 let ceiling = { update() {} };   // paneles fluorescentes; se construye en boot()
 let ghostMoving = false;         // lo fija moveGhost(); lo lee la sensación de cámara
 let ghostAvatar = null;          // monstruo-entidad (forma visible del fantasma); boot()
+let loungeCenter = null;         // centro de mundo de la sala temática; boot()
 // Corrección de encaje del frente del monstruo (su +Z local no es el frente "real").
 const AVATAR_FACE = Math.PI;
 
@@ -1283,6 +1285,7 @@ async function boot() {
   makeRitual(assets);
   torches.setModel(assets && assets.flashlight);   // linterna GLB en la mano (si cargó)
   ghostAvatar = createGhostAvatar(scene, assets && assets.monster);   // forma visible de la entidad
+  loungeCenter = placeLounge(scene, assets, { map: MAP, cols: COLS, rows: ROWS, cell: CELL, reachList: REACH.list, spawnGx: sx, spawnGz: sz });   // sala temática
   makeHunters(assets && assets.chars);
   startBtn.textContent = 'CLICK PARA JUGAR';
   startBtn.disabled = false;
@@ -1309,6 +1312,7 @@ async function boot() {
       altar() { const [x, z] = worldOf(ritual.altar.gx, ritual.altar.gz); this.lookAt(x, 0.8, z, 2.2); },
       mission(i = 0) { const m = ritual.missions[i]; if (!m) return; const [x, z] = worldOf(m.gx, m.gz); this.lookAt(x, 0.7, z, 1.8); },
       cross(i = 0) { const o = ritual.objects[i]; if (!o) return; const [x, z] = worldOf(o.gx, o.gz); this.lookAt(x, 0.4, z, 1.3); },
+      lounge() { if (loungeCenter) this.lookAt(loungeCenter[0], 0.7, loungeCenter[1], 2.6); },   // mira la sala temática
       scare() { scareForce = 2.5; },          // fuerza el JUMPSCARE del avatar de frente
       turn() { yaw += Math.PI; },             // gira 180° (para ver al acechador a tu espalda)
       avatarInfo() { if (!ghostAvatar) return 'NULL'; const b = new THREE.Box3().setFromObject(ghostAvatar.group); const sz = b.getSize(new THREE.Vector3()); return { meshes: ghostAvatar.meshCount, clips: ghostAvatar.clipNames, p: ghostAvatar.group.position.toArray().map((v) => +v.toFixed(2)), cam: [+pos.x.toFixed(2), +pos.z.toFixed(2)], frames: avFrames, size: sz.toArray().map((v) => +v.toFixed(2)) }; },

@@ -41,6 +41,9 @@ export async function loadAllAssets(n, onProgress = () => {}) {
     { key: 'flashlight', url: OBJ_DIR + 'flashlight.glb', optional: true },
     // Avatar-monstruo de la entidad (opcional: si falta, el fantasma es invisible).
     { key: 'monster', url: MONSTER_URL, optional: true },
+    // Mobiliario de la "sala temática" (sillón + juego de sillas).
+    { key: 'armchair', url: OBJ_DIR + 'backrooms_movie_armchair.glb', optional: true },
+    { key: 'chairs', url: OBJ_DIR + 'the_backrooms_chairs.glb', optional: true },
     ...chosen.map((name) => ({ key: name, url: charUrl(name) })),
   ];
   let done = 0;
@@ -58,6 +61,7 @@ export async function loadAllAssets(n, onProgress = () => {}) {
     env: results.env,
     mission: results.mission, altar: results.altar, cross: results.cross,
     flashlight: results.flashlight, monster: results.monster,
+    armchair: results.armchair, chairs: results.chairs,
     chars: chosen.map((name) => ({ name, gltf: results[name] })),
   };
 }
