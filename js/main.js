@@ -735,6 +735,9 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'Space') tryStartHunt();
   else if (e.code === 'KeyE') tryMori();
   else if (e.code === 'KeyO') debugAI = !debugAI;
+  // Pruebas del avatar-monstruo SIN consola (mientras juegas):
+  else if (e.code === 'KeyM') { avatarInspect = !avatarInspect; }  // M = planta el monstruo delante
+  else if (e.code === 'KeyN') { scareForce = 2.5; }                // N = dispara el JUMPSCARE
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('mousedown', (e) => { if (e.button === 0 && document.pointerLockElement === canvasEl) selectObserveTarget(); });
