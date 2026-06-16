@@ -14,8 +14,6 @@ export const SLOT_FILES = {
   cross: null,                                       // -> cruz procedural de madera
 };
 
-// Avatar de la entidad (el jugador): monstruo Backrooms con animaciones.
-export const MONSTER_URL = 'assets/models/characters/MONSTER/accurate_backrooms_bacteria_v2_with_animations.glb';
 
 // Nombres exactos de archivo (con espacios) del pack de personajes.
 export const CHARACTER_FILES = [
@@ -43,9 +41,7 @@ export async function loadAllAssets(n, onProgress = () => {}) {
     { key: 'env', url: ENV_URL },
     // Slots del ritual: opcionales (si no hay archivo -> modelo procedural).
     ...Object.entries(SLOT_FILES).filter(([, f]) => f).map(([s, f]) => ({ key: s, url: OBJ_DIR + f, optional: true })),
-    // (linternas retiradas: ya no se carga flashlight.glb)
-    // Avatar-monstruo de la entidad (opcional: si falta, el fantasma es invisible).
-    { key: 'monster', url: MONSTER_URL, optional: true },
+    // (linternas y monstruo retirados: no se cargan)
     // Mobiliario de la "sala temática" (sillón + juego de sillas).
     { key: 'armchair', url: OBJ_DIR + 'backrooms_movie_armchair.glb', optional: true },
     { key: 'chairs', url: OBJ_DIR + 'the_backrooms_chairs.glb', optional: true },
@@ -66,7 +62,6 @@ export async function loadAllAssets(n, onProgress = () => {}) {
   return {
     env: results.env,
     mission: results.mission, altar: results.altar, cross: results.cross,
-    flashlight: results.flashlight, monster: results.monster,
     armchair: results.armchair, chairs: results.chairs,
     chars: chosen.map((name) => ({ name, gltf: results[name] })),
   };

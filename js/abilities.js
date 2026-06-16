@@ -17,7 +17,7 @@ export const AB = {
   TRAP_RADIUS: 2,        // celdas (Manhattan)
   DECOY_DUR: 8,          // s que dura el señuelo
   SPECTRAL_DUR: 6,       // s de visión espectral
-  HUNT_DUR: 60,          // s de cacería activada (más larga tras playtest)
+  HUNT_DUR: 30,          // s de cacería activada (con auto-cacería cada minuto)
   HUNT_SPEED_MULT: 1.3,  // multiplicador de velocidad del fantasma en cacería
   SENSE_RANGE: 10,       // unidades de mundo: rango de "sonido"/sentido (suben al detectarte y se alejan)
   OBS_RANGE: 25,         // unidades de mundo: alcance de la observación
