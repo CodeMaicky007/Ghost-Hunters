@@ -12,7 +12,7 @@ import { bakeGrid } from './grid.js';
 import { collidesBoxGrid, parryChance, rollParry, PARRY_DEFAULTS, hitResult, canRevive, heartbeatInterval } from './logic.js';
 import { HunterModel } from './hunters.js';
 import { createPost, createCameraFeel, createDust, createBursts } from './fx.js';
-import { buildCeilingLights, createFlashlights } from './lights.js';
+import { buildCeilingLights } from './lights.js';
 import { dressFloor } from './setdress.js';
 import { buildMonitor, buildAltar, buildCross } from './propmodels.js';
 import { createGhostAvatar } from './ghostavatar.js';
@@ -43,7 +43,7 @@ const NUM_HUNTERS = 8;
 const NUM_RITUAL_OBJECTS = 4;
 const RITUAL_SPREAD = 18;   // radio (celdas) de la región donde caen altar+objetos
 const NUM_MISSIONS = 6;
-const REPAIR_RATE = 0.12;   // progreso/seg de una misión (~8s con un bot)
+const REPAIR_RATE = 0.32;   // progreso/seg de una misión (~3s con un bot; ritmo rápido)
 const MISSION_HEIGHT = 0.95; // alto objetivo del monitor
 const HUNTER_SPEED = 2.8;
 const HUNTER_FLEE_SPEED = 3.6;
@@ -187,7 +187,9 @@ const post = createPost(renderer, scene, camera);
 const feel = createCameraFeel(camera, 80);
 const dust = createDust(scene);
 const bursts = createBursts(scene);
-const torches = createFlashlights(scene, 4);
+// Linternas de los investigadores RETIRADAS (a petición): stub no-op para que las
+// llamadas existentes (attach/update/setModel) sigan siendo seguras.
+const torches = { setModel() {}, attach() {}, update() {} };
 let ceiling = { update() {} };   // paneles fluorescentes; se construye en boot()
 let ghostMoving = false;         // lo fija moveGhost(); lo lee la sensación de cámara
 let ghostAvatar = null;          // monstruo-entidad (forma visible del fantasma); boot()

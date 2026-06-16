@@ -4,7 +4,7 @@
 // ============================================================
 
 export const AB = {
-  ENERGY_REGEN: 0.09,    // energía/seg (barra llena en ~11 s base; cacerías más frecuentes)
+  ENERGY_REGEN: 0.2,     // energía/seg (barra llena en ~5 s -> cacerías mucho más frecuentes)
   STALK_BONUS: 0.05,     // +energía/seg acechando (cerca de supervivientes)
   COST_TELEPORT: 0.25,
   COST_TRAP: 0.3,

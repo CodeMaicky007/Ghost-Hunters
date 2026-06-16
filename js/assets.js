@@ -43,8 +43,7 @@ export async function loadAllAssets(n, onProgress = () => {}) {
     { key: 'env', url: ENV_URL },
     // Slots del ritual: opcionales (si no hay archivo -> modelo procedural).
     ...Object.entries(SLOT_FILES).filter(([, f]) => f).map(([s, f]) => ({ key: s, url: OBJ_DIR + f, optional: true })),
-    // Linterna que llevan los investigadores (prop que se cuelga al rig de luz).
-    { key: 'flashlight', url: OBJ_DIR + 'flashlight.glb', optional: true },
+    // (linternas retiradas: ya no se carga flashlight.glb)
     // Avatar-monstruo de la entidad (opcional: si falta, el fantasma es invisible).
     { key: 'monster', url: MONSTER_URL, optional: true },
     // Mobiliario de la "sala temática" (sillón + juego de sillas).
