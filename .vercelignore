@@ -1,0 +1,16 @@
+node_modules
+.git
+.claude
+shots
+test
+scripts
+docs
+norms
+package-lock.json
+# Monstruo retirado del juego (no se carga): no lo subimos (12 MB)
+assets/models/characters/MONSTER
+# GLBs de objetos ya no usados
+assets/models/objects/mesa.glb
+assets/models/objects/wooden_cross.glb
+assets/models/objects/flashlight.glb
+assets/models/objects/vintage_television_-_panasonic_tr-555.glb
